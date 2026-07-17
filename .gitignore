@@ -8,6 +8,10 @@
 *.ap_
 *.aab
 
+# ...except published release builds, which are intentionally committed
+# so the README's download link works
+!/release/*.apk
+
 # Dalvik bytecode
 *.dex
 
