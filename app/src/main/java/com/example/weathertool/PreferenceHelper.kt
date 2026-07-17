@@ -25,7 +25,7 @@ class PreferenceHelper(context: Context) {
 
     /** CWA (中央氣象署) open data API authorization key */
     var apiKey: String
-        get() = prefs.getString(KEY_API_KEY, "") ?: ""
+        get() = prefs.getString(KEY_API_KEY, BuildConfig.CWA_API_KEY) ?: BuildConfig.CWA_API_KEY
         set(value) = prefs.edit().putString(KEY_API_KEY, value).apply()
 
     /** Rainfall probability threshold (0–100 %). Alert fires when PoP > threshold. */

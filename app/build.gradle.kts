@@ -1,6 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Load local.properties so the CWA API key can be injected at build time
+// without being committed to source control.
+val localProperties = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
 }
 
 android {
@@ -15,6 +24,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Expose the CWA API key as BuildConfig.CWA_API_KEY so it can be used
+        // as the default value in PreferenceHelper without being hard-coded in
+        // any committed source file.
+        buildConfigField(
+            "String",
+            "CWA_API_KEY",
+            "\"${localProperties.getProperty("CWA_API_KEY", "")}\""
+        )
     }
 
     buildTypes {
