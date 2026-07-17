@@ -1,6 +1,11 @@
 package com.example.weathertool
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.ArrayAdapter
 import android.widget.SeekBar
 import android.widget.Toast
@@ -32,6 +37,24 @@ class SettingsActivity : AppCompatActivity() {
         setupIntervalSpinner()
         loadSettings()
         setupListeners()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The battery optimization exemption is granted via a system settings screen,
+        // so re-check it whenever the user comes back to this Activity.
+        updateBatteryOptimizationStatus()
+    }
+
+    private fun updateBatteryOptimizationStatus() {
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        val isExempt = powerManager.isIgnoringBatteryOptimizations(packageName)
+        binding.btnBatteryOptimization.isEnabled = !isExempt
+        binding.tvBatteryOptimizationDescription.text = if (isExempt) {
+            getString(R.string.battery_optimization_already_exempt)
+        } else {
+            getString(R.string.battery_optimization_description)
+        }
     }
 
     private fun setupIntervalSpinner() {
@@ -77,6 +100,18 @@ class SettingsActivity : AppCompatActivity() {
                 WeatherWorker.schedule(this)
             } else {
                 WeatherWorker.cancel(this)
+            }
+        }
+
+        binding.btnBatteryOptimization.setOnClickListener {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                )
+            } catch (e: ActivityNotFoundException) {
+                // Not all OEM/Android builds support this intent; nothing more we can do here.
             }
         }
 

@@ -157,22 +157,25 @@ App 沒反應或直接跳回桌面，通常是崩潰了，用 logcat 找 `FATAL 
 
 所有原始碼都放在同一個 package：`app/src/main/java/com/example/weathertool/`。專案沒有分層為多個模組——每個類別各司其職、職責單一，彼此透過 `PreferenceHelper`（SharedPreferences）作為共享狀態溝通，而非透過 DI 容器。
 
-**每小時檢查的資料流**（`WeatherWorker.doWork()`），是整個 App 的核心邏輯：
+**每次檢查的資料流**（`WeatherWorker.doWork()`），是整個 App 的核心邏輯：
 
-1. `WeatherWorker`（透過 WorkManager 每小時排程的 `CoroutineWorker`）從 `PreferenceHelper` 讀取設定；若監控未啟用或未設定 API 金鑰，會提早結束。
-2. `LocationHelper.getCurrentLocation()` 透過 `FusedLocationProviderClient` 取得最近一次已知的 GPS 定位，接著 `getCityFromLocation()` 使用 `Geocoder` 搭配 `CITY_NAME_MAP` 對照表反向地理編碼為 CWA 標準縣市名稱（涵蓋台灣全部 22 個行政區，並正規化「台」／「臺」異體字）。
+1. `WeatherWorker`（`CoroutineWorker`，由 WorkManager 依 `PreferenceHelper.checkIntervalMinutes` 設定的頻率排程，或由「即時偵測」按鈕觸發一次性執行）從 `PreferenceHelper` 讀取設定；若非手動觸發且監控未啟用，或未設定 API 金鑰，會提早結束。
+2. `LocationHelper.getCurrentLocation()` 透過 `FusedLocationProviderClient` 取得最近一次已知的 GPS 定位，接著 `getCityFromLocation()` 使用 `Geocoder` 搭配 `CITY_NAME_MAP` 對照表反向地理編碼為 CWA 標準縣市名稱（涵蓋台灣全部 22 個行政區，並正規化「台」／「臺」異體字）。若定位或反查失敗，改用 `PreferenceHelper.DEFAULT_FALLBACK_CITY`（臺北市）繼續檢查，不再無限重試，並將 `locationIsFallback` 設為 true 供 UI 顯示警示。
 3. `WeatherApiService.create().getWeatherForecast(...)`（Retrofit + OkHttp + Gson）呼叫 CWA 的 `F-C0032-001` 端點，並反序列化為 `WeatherResponse` → `WeatherRecords` → `LocationData` → `WeatherElement` → `TimeData` → `Parameter` 這條資料類別鏈（定義於 `WeatherResponse.kt`）。
 4. `WeatherWorker.extractPoP()` 從上述回應樹中取出對應城市第一個時段的 PoP（`parameterName`）數值。
-5. 若 PoP 超過 `PreferenceHelper.rainThreshold`，`NotificationHelper.showRainAlert()` 會推送通知（通知頻道在其 `init` 中延遲建立）。
-6. 定位或 API 呼叫任一步驟失敗時一律回傳 `Result.retry()`，交由 WorkManager 內建的指數退避機制處理（設定於 `WeatherWorker.schedule()`），不額外實作自訂重試邏輯。
+5. 若 PoP 超過 `PreferenceHelper.rainThreshold`，`NotificationHelper.showRainAlert()` 會推送通知；訊息文字由 `NotificationHelper.buildAlertMessage()`（不依賴 Context 的純函式，方便單元測試）組成。
+6. API 呼叫失敗（非定位問題）時一律回傳 `Result.retry()`，交由 WorkManager 內建的指數退避機制處理，不額外實作自訂重試邏輯。
 
 **排程與生命週期：**
-- `WeatherWorker.schedule()` / `.cancel()` 是唯一會操作 WorkManager 的進入點；分別由 `MainActivity`（切換按鈕）、`SettingsActivity`（監控開關）、`BootReceiver`（在 `BOOT_COMPLETED` 時，僅當先前已啟用監控才觸發）呼叫——確保這三處 UI／生命週期觸發點行為一致。
-- 刻意使用 `ExistingPeriodicWorkPolicy.KEEP`，讓重新排程（例如開機後）不會重置每小時的計時器。
+- `WeatherWorker.schedule()` / `.cancel()` 是唯一會操作週期性 WorkManager 工作的進入點；分別由 `MainActivity`（切換按鈕）、`SettingsActivity`（監控開關／變更檢查頻率後）、`BootReceiver`（在 `BOOT_COMPLETED` 時，僅當先前已啟用監控才觸發）呼叫——確保這些 UI／生命週期觸發點行為一致。
+- 使用 `ExistingPeriodicWorkPolicy.UPDATE`（而非 `KEEP`），讓使用者在設定頁變更檢查頻率後，重新排程會立即套用新間隔，而不是被舊排程忽略。
+- `WeatherWorker.enqueueImmediateCheck()` 另外用 `OneTimeWorkRequest` + `ExistingWorkPolicy.REPLACE` 排入一次性工作（`MANUAL_WORK_NAME`），供「即時偵測」按鈕使用，會略過監控開關的檢查但仍需要 API 金鑰。
 
 **UI：**
-- `MainActivity` 只負責顯示狀態（來自 `PreferenceHelper`）並驅動權限請求流程：POST_NOTIFICATIONS（Android 13+）→ ACCESS_FINE/COARSE_LOCATION → ACCESS_BACKGROUND_LOCATION（Android 10+），不論使用者是否同意，每一步都會繼續往下走，讓 App 優雅降級而非卡住流程。
-- `SettingsActivity` 直接對 `PreferenceHelper` 讀寫 API 金鑰／閾值／監控開關；切換監控開關會立即呼叫 `WeatherWorker.schedule/cancel`，不需等待儲存動作。
+- `MainActivity` 只負責顯示狀態（來自 `PreferenceHelper`）並驅動權限請求流程：POST_NOTIFICATIONS（Android 13+）→ ACCESS_FINE/COARSE_LOCATION → ACCESS_BACKGROUND_LOCATION（Android 10+）→ 電池優化白名單（`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，讓 App 未開啟時背景工作仍能準時觸發），不論使用者是否同意，每一步都會繼續往下走，讓 App 優雅降級而非卡住流程。
+- `MainActivity` 透過單一常駐的 `WorkManager.getWorkInfosForUniqueWorkLiveData(MANUAL_WORK_NAME)` observer 追蹤「即時偵測」的執行狀態，並用 `manualCheckPending` 旗標避免畫面重建（如旋轉）時重複觸發 Toast。
+- `SettingsActivity` 直接對 `PreferenceHelper` 讀寫 API 金鑰／閾值／檢查頻率／監控開關；切換監控開關或儲存時變更頻率都會立即呼叫 `WeatherWorker.schedule/cancel`，不需等待額外動作。同時提供「前往電池優化設定」按鈕，讓一開始拒絕的使用者能事後補授權。
 - 兩個 Activity 皆使用 view binding（`ActivityMainBinding` / `ActivitySettingsBinding`）；對應設定為 `app/build.gradle.kts` 中的 `buildFeatures.viewBinding = true`。
+- `MainActivity` 使用 `Theme.WeatherTool.NoActionBar`（透過 manifest 的 `android:theme` 覆寫），因為它用自訂 Toolbar 呼叫 `setSupportActionBar()`；`SettingsActivity` 則沿用預設的 `Theme.WeatherTool`（`DarkActionBar`），依賴系統提供的 ActionBar 顯示返回箭頭——兩者主題不可對調，否則會閃退或返回鍵消失。
 
-**狀態管理：** `PreferenceHelper` 是唯一的狀態來源，同時保存使用者設定（API 金鑰、閾值、監控開關）與最近一次觀測結果（最後定位、最後 PoP、最後檢查時間）——專案中沒有資料庫或 repository 層。
+**狀態管理：** `PreferenceHelper` 是唯一的狀態來源，同時保存使用者設定（API 金鑰、閾值、檢查頻率、監控開關）與最近一次觀測結果（最後定位、定位是否為預設值、最後 PoP、最後檢查時間）——專案中沒有資料庫或 repository 層。電池優化白名單狀態不存在 `PreferenceHelper` 中，而是即時查詢 `PowerManager.isIgnoringBatteryOptimizations()`（系統本身已追蹤，不需重複保存）。

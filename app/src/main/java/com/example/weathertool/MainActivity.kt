@@ -3,8 +3,11 @@ package com.example.weathertool
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -55,8 +58,8 @@ class MainActivity : AppCompatActivity() {
                 R.string.permission_background_denied_message
             )
         }
-        // Start monitoring regardless; foreground-only location may still work.
-        startMonitoringIfEnabled()
+        // Proceed regardless; foreground-only location may still work.
+        requestIgnoreBatteryOptimizationsIfNeeded()
     }
 
     private val notificationPermissionRequest = registerForActivityResult(
@@ -134,6 +137,15 @@ class MainActivity : AppCompatActivity() {
         val apiKey = prefHelper.apiKey
         binding.tvApiStatus.setText(
             if (apiKey.isNotEmpty()) R.string.api_key_configured else R.string.api_key_not_configured
+        )
+
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        binding.tvBatteryStatus.setText(
+            if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                R.string.battery_optimization_exempt
+            } else {
+                R.string.battery_optimization_not_exempt
+            }
         )
 
         val lastLocation = prefHelper.lastLocation
@@ -294,7 +306,7 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(
                     this, Manifest.permission.ACCESS_BACKGROUND_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    startMonitoringIfEnabled()
+                    requestIgnoreBatteryOptimizationsIfNeeded()
                 }
                 shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_BACKGROUND_LOCATION) -> {
                     AlertDialog.Builder(this)
@@ -306,7 +318,7 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         .setNegativeButton(R.string.cancel) { _, _ ->
-                            startMonitoringIfEnabled()
+                            requestIgnoreBatteryOptimizationsIfNeeded()
                         }
                         .show()
                 }
@@ -315,7 +327,45 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         } else {
+            requestIgnoreBatteryOptimizationsIfNeeded()
+        }
+    }
+
+    /**
+     * Asks the user to exempt the app from Doze/battery optimization so the periodic
+     * WorkManager check still fires promptly while the app is closed. Proceeds to start
+     * monitoring regardless of the outcome — this is a reliability improvement, not a
+     * hard requirement.
+     */
+    private fun requestIgnoreBatteryOptimizationsIfNeeded() {
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
             startMonitoringIfEnabled()
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.permission_battery_title)
+            .setMessage(R.string.permission_battery_message)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                launchIgnoreBatteryOptimizationsSettings()
+                startMonitoringIfEnabled()
+            }
+            .setNegativeButton(R.string.cancel) { _, _ ->
+                startMonitoringIfEnabled()
+            }
+            .show()
+    }
+
+    private fun launchIgnoreBatteryOptimizationsSettings() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+            )
+        } catch (e: android.content.ActivityNotFoundException) {
+            // Not all OEM/Android builds support this intent; nothing more we can do here.
         }
     }
 
