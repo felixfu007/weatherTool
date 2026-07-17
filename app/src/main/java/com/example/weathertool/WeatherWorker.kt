@@ -106,9 +106,9 @@ class WeatherWorker(
                 }
             }
 
-            Result.success()
+            return@withContext Result.success()
         } catch (e: Exception) {
-            Result.retry()
+            return@withContext Result.retry()
         }
     }
 
