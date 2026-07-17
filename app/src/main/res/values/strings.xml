@@ -1,0 +1,84 @@
+<resources>
+    <string name="app_name">天氣提醒工具</string>
+
+    <!-- Main Activity -->
+    <string name="monitoring_status_title">監控狀態</string>
+    <string name="monitoring_active">✅ 監控已啟動</string>
+    <string name="monitoring_inactive">❌ 監控已停止</string>
+    <string name="api_key_configured">🔑 API 金鑰已設定</string>
+    <string name="api_key_not_configured">⚠️ 請先至設定頁輸入 API 金鑰</string>
+    <string name="current_location">📍 目前位置：%s</string>
+    <string name="location_unknown">📍 位置未知</string>
+    <string name="location_fallback_warning">⚠️ 無法偵測 GPS，已使用預設地區：%s</string>
+    <string name="current_pop">🌧 降雨機率：%d%%</string>
+    <string name="pop_unknown">🌧 降雨機率：尚未取得</string>
+    <string name="current_threshold">⚙️ 提醒閾值：%d%%</string>
+    <string name="current_interval">⏱ 檢查頻率：%s</string>
+    <string name="battery_optimization_exempt">🔋 背景執行：不受電池優化限制</string>
+    <string name="battery_optimization_not_exempt">⚠️ 背景執行：可能受電池優化限制，通知可能延遲或無法送達</string>
+    <string name="last_check_time">🕐 上次檢查：%s</string>
+    <string name="no_check_yet">🕐 尚未自動檢查</string>
+    <string name="start_monitoring">開始監控</string>
+    <string name="stop_monitoring">停止監控</string>
+    <string name="check_now">及時偵測</string>
+    <string name="check_now_running">正在檢查天氣狀況…</string>
+    <string name="check_now_success">天氣狀況已更新</string>
+    <string name="check_now_failed">檢查失敗，請稍後再試</string>
+    <string name="go_to_settings">前往設定</string>
+
+    <!-- Settings Activity -->
+    <string name="settings">設定</string>
+    <string name="api_key_title">中央氣象署 API 金鑰</string>
+    <string name="api_key_hint_text">請至 opendata.cwa.gov.tw 免費申請授權碼</string>
+    <string name="api_key_hint">輸入 API 授權碼</string>
+    <string name="threshold_title">降雨機率提醒閾值</string>
+    <string name="threshold_description">當降雨機率超過此值時，系統將發送提醒通知</string>
+    <string name="threshold_value">閾值：%d%%</string>
+    <string name="interval_title">檢查頻率</string>
+    <string name="interval_description">背景自動檢查天氣的時間間隔</string>
+    <string name="monitoring_title">啟用監控</string>
+    <string name="monitoring_description">依上方設定的頻率自動檢查天氣，降雨機率過高時提醒</string>
+    <string name="battery_optimization_title">背景執行</string>
+    <string name="battery_optimization_description">若系統的電池優化限制了本 App，背景通知可能會延遲或收不到，請點選下方按鈕排除限制</string>
+    <string name="battery_optimization_button">前往電池優化設定</string>
+    <string name="battery_optimization_already_exempt">已排除電池優化限制</string>
+    <string name="save">儲存設定</string>
+    <string name="settings_saved">設定已儲存</string>
+    <string name="api_key_required">請輸入 API 金鑰</string>
+
+    <string-array name="interval_options">
+        <item>15 分鐘</item>
+        <item>30 分鐘</item>
+        <item>1 小時</item>
+        <item>2 小時</item>
+        <item>3 小時</item>
+        <item>6 小時</item>
+        <item>12 小時</item>
+        <item>24 小時</item>
+    </string-array>
+
+    <!-- Notifications -->
+    <string name="channel_name">天氣提醒</string>
+    <string name="channel_description">當降雨機率超過設定閾值時發送提醒通知</string>
+    <string name="notification_title">☔ 降雨提醒</string>
+    <!-- Message wording is built in NotificationHelper.buildAlertMessage() so it stays unit-testable. -->
+
+    <!-- Permission dialogs -->
+    <string name="permission_notification_title">通知權限</string>
+    <string name="permission_notification_message">此應用程式需要通知權限，才能在降雨機率過高時提醒您。</string>
+    <string name="permission_location_title">位置權限</string>
+    <string name="permission_location_message">此應用程式需要位置權限，才能取得您所在地的天氣資訊。</string>
+    <string name="permission_background_location_title">背景位置權限</string>
+    <string name="permission_background_location_message">為了每小時在背景自動檢查天氣，請在系統設定中將位置存取設為「始終允許」。</string>
+    <string name="permission_denied_title">位置權限被拒</string>
+    <string name="permission_location_denied_message">無法取得位置權限，應用程式將無法自動取得天氣資訊。請在系統設定中手動授予位置權限。</string>
+    <string name="permission_background_denied_title">背景位置權限未授予</string>
+    <string name="permission_background_denied_message">未授予背景位置權限。應用程式仍可在前台執行，但在背景可能無法正常取得位置。</string>
+    <string name="permission_battery_title">背景執行設定</string>
+    <string name="permission_battery_message">為了在您沒有開啟 App 的情況下，仍能準時收到降雨通知，請將本 App 從電池優化中排除，允許背景執行。</string>
+    <string name="ok">確定</string>
+    <string name="cancel">取消</string>
+
+    <!-- Menu -->
+    <string name="action_settings">設定</string>
+</resources>

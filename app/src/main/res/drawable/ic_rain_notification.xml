@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notification small icon – rain drop silhouette.
+    Must be a single-color (white/transparent) vector for Android notification tray.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!--
+        Cloud with rain drop path (Material Design "water_drop" inspired).
+        Uses a single white fill so the system can tint it appropriately.
+    -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M17.66,8L12,2.35L6.34,8C4.78,9.56 4,11.64 4,13.64
+            c0,2 0.78,4.04 2.34,5.6 1.56,1.56 3.6,2.36 5.63,2.36
+            s4.1,-0.78 5.66,-2.35c1.56,-1.57 2.37,-3.6 2.37,-5.61
+            L20,13.64c0,-2 -0.78,-4.07 -2.34,-5.64z" />
+</vector>
