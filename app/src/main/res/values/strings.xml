@@ -3,19 +3,25 @@
 
     <!-- Main Activity -->
     <string name="monitoring_status_title">監控狀態</string>
-    <string name="monitoring_active">✅ 監控已啟動（每小時自動檢查）</string>
+    <string name="monitoring_active">✅ 監控已啟動</string>
     <string name="monitoring_inactive">❌ 監控已停止</string>
     <string name="api_key_configured">🔑 API 金鑰已設定</string>
     <string name="api_key_not_configured">⚠️ 請先至設定頁輸入 API 金鑰</string>
     <string name="current_location">📍 目前位置：%s</string>
     <string name="location_unknown">📍 位置未知</string>
+    <string name="location_fallback_warning">⚠️ 無法偵測 GPS，已使用預設地區：%s</string>
     <string name="current_pop">🌧 降雨機率：%d%%</string>
     <string name="pop_unknown">🌧 降雨機率：尚未取得</string>
     <string name="current_threshold">⚙️ 提醒閾值：%d%%</string>
+    <string name="current_interval">⏱ 檢查頻率：%s</string>
     <string name="last_check_time">🕐 上次檢查：%s</string>
     <string name="no_check_yet">🕐 尚未自動檢查</string>
     <string name="start_monitoring">開始監控</string>
     <string name="stop_monitoring">停止監控</string>
+    <string name="check_now">及時偵測</string>
+    <string name="check_now_running">正在檢查天氣狀況…</string>
+    <string name="check_now_success">天氣狀況已更新</string>
+    <string name="check_now_failed">檢查失敗，請稍後再試</string>
     <string name="go_to_settings">前往設定</string>
 
     <!-- Settings Activity -->
@@ -26,19 +32,30 @@
     <string name="threshold_title">降雨機率提醒閾值</string>
     <string name="threshold_description">當降雨機率超過此值時，系統將發送提醒通知</string>
     <string name="threshold_value">閾值：%d%%</string>
+    <string name="interval_title">檢查頻率</string>
+    <string name="interval_description">背景自動檢查天氣的時間間隔</string>
     <string name="monitoring_title">啟用監控</string>
-    <string name="monitoring_description">每小時自動檢查天氣，降雨機率過高時提醒</string>
+    <string name="monitoring_description">依上方設定的頻率自動檢查天氣，降雨機率過高時提醒</string>
     <string name="save">儲存設定</string>
     <string name="settings_saved">設定已儲存</string>
     <string name="api_key_required">請輸入 API 金鑰</string>
+
+    <string-array name="interval_options">
+        <item>15 分鐘</item>
+        <item>30 分鐘</item>
+        <item>1 小時</item>
+        <item>2 小時</item>
+        <item>3 小時</item>
+        <item>6 小時</item>
+        <item>12 小時</item>
+        <item>24 小時</item>
+    </string-array>
 
     <!-- Notifications -->
     <string name="channel_name">天氣提醒</string>
     <string name="channel_description">當降雨機率超過設定閾值時發送提醒通知</string>
     <string name="notification_title">☔ 降雨提醒</string>
-    <!-- %1$s = city name, %2$d = PoP%, %3$d = threshold% -->
-    <string name="notification_message">%1$s 降雨機率 %2$d%%（閾值 %3$d%%），請帶傘！</string>
-    <string name="notification_message_full">您目前位於 %1$s，降雨機率為 %2$d%%，已超過您設定的提醒閾值 %3$d%%。\n\n建議攜帶雨傘外出。</string>
+    <!-- Message wording is built in NotificationHelper.buildAlertMessage() so it stays unit-testable. -->
 
     <!-- Permission dialogs -->
     <string name="permission_notification_title">通知權限</string>

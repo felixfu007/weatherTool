@@ -73,6 +73,15 @@
                         android:textSize="14sp" />
 
                     <TextView
+                        android:id="@+id/tv_location_fallback_warning"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:textColor="@color/colorAccent"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                    <TextView
                         android:id="@+id/tv_current_pop"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -81,6 +90,13 @@
 
                     <TextView
                         android:id="@+id/tv_threshold"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="6dp"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/tv_interval"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="6dp"
@@ -103,6 +119,16 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:text="@string/start_monitoring"
+                android:textSize="16sp" />
+
+            <!-- Immediate one-off check -->
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:id="@+id/btn_check_now"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="@string/check_now"
                 android:textSize="16sp" />
 
             <!-- Settings shortcut -->

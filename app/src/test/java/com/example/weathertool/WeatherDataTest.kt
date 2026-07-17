@@ -139,4 +139,39 @@ class WeatherDataTest {
     fun `monitoring is disabled by default`() {
         assertFalse(PreferenceHelper.DEFAULT_MONITORING_ENABLED)
     }
+
+    @Test
+    fun `default check interval is 60 minutes`() {
+        assertEquals(60, PreferenceHelper.DEFAULT_CHECK_INTERVAL_MINUTES)
+    }
+
+    @Test
+    fun `interval options are ascending and respect WorkManager's 15-minute minimum`() {
+        val options = PreferenceHelper.INTERVAL_OPTIONS_MINUTES
+        assertEquals(15, options.min())
+        assertEquals(options.toList(), options.sorted())
+        assertTrue(PreferenceHelper.DEFAULT_CHECK_INTERVAL_MINUTES in options)
+    }
+
+    @Test
+    fun `location fallback defaults to Taipei and is off by default`() {
+        assertEquals("臺北市", PreferenceHelper.DEFAULT_FALLBACK_CITY)
+        assertFalse(PreferenceHelper.DEFAULT_LOCATION_IS_FALLBACK)
+    }
+
+    // -----------------------------------------------------------------------
+    // NotificationHelper – alert message wording
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `alert message follows the required wording`() {
+        val message = NotificationHelper.buildAlertMessage("臺北市", 50)
+        assertEquals("您所在的臺北市，目前降雨機率已超過50%，請多加留意。", message)
+    }
+
+    @Test
+    fun `alert message substitutes location and threshold correctly`() {
+        val message = NotificationHelper.buildAlertMessage("高雄市", 80)
+        assertEquals("您所在的高雄市，目前降雨機率已超過80%，請多加留意。", message)
+    }
 }

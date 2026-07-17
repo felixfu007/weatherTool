@@ -7,10 +7,14 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.example.weathertool.databinding.ActivityMainBinding
 import java.text.SimpleDateFormat
 import java.util.*
@@ -23,6 +27,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefHelper: PreferenceHelper
+    private var manualCheckPending = false
 
     // --- Permission launchers ---
 
@@ -79,6 +84,11 @@ class MainActivity : AppCompatActivity() {
             toggleMonitoring()
         }
 
+        binding.btnCheckNow.setOnClickListener {
+            performImmediateCheck()
+        }
+
+        observeManualCheck()
         updateUI()
 
         // Request permissions on first launch
@@ -132,6 +142,14 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.location_unknown)
         }
+        if (prefHelper.locationIsFallback) {
+            binding.tvLocationFallbackWarning.text = getString(
+                R.string.location_fallback_warning, PreferenceHelper.DEFAULT_FALLBACK_CITY
+            )
+            binding.tvLocationFallbackWarning.visibility = View.VISIBLE
+        } else {
+            binding.tvLocationFallbackWarning.visibility = View.GONE
+        }
 
         val lastPop = prefHelper.lastPop
         binding.tvCurrentPop.text = if (lastPop >= 0) {
@@ -142,12 +160,22 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvThreshold.text = getString(R.string.current_threshold, prefHelper.rainThreshold)
 
+        val intervalLabels = resources.getStringArray(R.array.interval_options)
+        val intervalIndex = PreferenceHelper.INTERVAL_OPTIONS_MINUTES.indexOf(prefHelper.checkIntervalMinutes)
+        val intervalLabel = if (intervalIndex >= 0) intervalLabels[intervalIndex] else "${prefHelper.checkIntervalMinutes} 分鐘"
+        binding.tvInterval.text = getString(R.string.current_interval, intervalLabel)
+
         val lastCheckTime = prefHelper.lastCheckTime
         binding.tvLastCheckTime.text = if (lastCheckTime > 0) {
             val fmt = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
             getString(R.string.last_check_time, fmt.format(Date(lastCheckTime)))
         } else {
             getString(R.string.no_check_yet)
+        }
+
+        if (!manualCheckPending) {
+            binding.btnCheckNow.isEnabled = true
+            binding.btnCheckNow.setText(R.string.check_now)
         }
     }
 
@@ -168,6 +196,42 @@ class MainActivity : AppCompatActivity() {
         if (prefHelper.monitoringEnabled) {
             WeatherWorker.schedule(this)
         }
+    }
+
+    /**
+     * Registers a single, activity-lifetime observer on the manual-check work.
+     * [manualCheckPending] gates the reaction so a stale/replayed [WorkInfo] from a
+     * previous run (e.g. after rotation) doesn't re-trigger the toast/UI reset.
+     */
+    private fun observeManualCheck() {
+        WorkManager.getInstance(this)
+            .getWorkInfosForUniqueWorkLiveData(WeatherWorker.MANUAL_WORK_NAME)
+            .observe(this) { workInfos ->
+                val info = workInfos?.firstOrNull() ?: return@observe
+                if (manualCheckPending && info.state.isFinished) {
+                    manualCheckPending = false
+                    updateUI()
+                    val messageRes = if (info.state == WorkInfo.State.SUCCEEDED) {
+                        R.string.check_now_success
+                    } else {
+                        R.string.check_now_failed
+                    }
+                    Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
+                }
+            }
+    }
+
+    private fun performImmediateCheck() {
+        if (prefHelper.apiKey.isBlank()) {
+            Toast.makeText(this, R.string.api_key_required, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        manualCheckPending = true
+        binding.btnCheckNow.isEnabled = false
+        binding.btnCheckNow.setText(R.string.check_now_running)
+
+        WeatherWorker.enqueueImmediateCheck(this)
     }
 
     // --- Permission helpers ---

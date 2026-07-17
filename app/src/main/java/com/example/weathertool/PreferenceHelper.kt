@@ -18,9 +18,19 @@ class PreferenceHelper(context: Context) {
         const val KEY_LAST_CHECK_TIME = "last_check_time"
         const val KEY_LAST_LOCATION = "last_location"
         const val KEY_LAST_POP = "last_pop"
+        const val KEY_CHECK_INTERVAL_MINUTES = "check_interval_minutes"
+        const val KEY_LOCATION_IS_FALLBACK = "location_is_fallback"
 
         const val DEFAULT_THRESHOLD = 50
         const val DEFAULT_MONITORING_ENABLED = false
+        const val DEFAULT_CHECK_INTERVAL_MINUTES = 60
+        const val DEFAULT_LOCATION_IS_FALLBACK = false
+
+        /** Selectable background check frequencies, in minutes. WorkManager enforces a 15-minute minimum. */
+        val INTERVAL_OPTIONS_MINUTES = intArrayOf(15, 30, 60, 120, 180, 360, 720, 1440)
+
+        /** Used when GPS/location resolution fails, so a check can still run instead of retrying forever. */
+        const val DEFAULT_FALLBACK_CITY = "臺北市"
     }
 
     /** CWA (中央氣象署) open data API authorization key */
@@ -52,4 +62,14 @@ class PreferenceHelper(context: Context) {
     var lastPop: Int
         get() = prefs.getInt(KEY_LAST_POP, -1)
         set(value) = prefs.edit().putInt(KEY_LAST_POP, value).apply()
+
+    /** How often (in minutes) the background check runs. One of [INTERVAL_OPTIONS_MINUTES]. */
+    var checkIntervalMinutes: Int
+        get() = prefs.getInt(KEY_CHECK_INTERVAL_MINUTES, DEFAULT_CHECK_INTERVAL_MINUTES)
+        set(value) = prefs.edit().putInt(KEY_CHECK_INTERVAL_MINUTES, value).apply()
+
+    /** Whether [lastLocation] is [DEFAULT_FALLBACK_CITY] because GPS/location resolution failed. */
+    var locationIsFallback: Boolean
+        get() = prefs.getBoolean(KEY_LOCATION_IS_FALLBACK, DEFAULT_LOCATION_IS_FALLBACK)
+        set(value) = prefs.edit().putBoolean(KEY_LOCATION_IS_FALLBACK, value).apply()
 }

@@ -7,12 +7,16 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
 /**
- * WorkManager periodic worker that runs every hour to:
- * 1. Obtain the device's current GPS location.
- * 2. Resolve it to a CWA county/city name.
- * 3. Call the CWA open-data API (F-C0032-001) for the 36-hour forecast.
- * 4. Extract the current period's precipitation probability (PoP).
- * 5. Post a notification if PoP exceeds the user-configured threshold.
+ * WorkManager worker that:
+ * 1. Obtains the device's current GPS location, falling back to
+ *    [PreferenceHelper.DEFAULT_FALLBACK_CITY] if no fix is available or reverse-geocoding fails.
+ * 2. Resolves it to a CWA county/city name.
+ * 3. Calls the CWA open-data API (F-C0032-001) for the 36-hour forecast.
+ * 4. Extracts the current period's precipitation probability (PoP).
+ * 5. Posts a notification if PoP exceeds the user-configured threshold.
+ *
+ * Runs on a periodic schedule (interval configured via [PreferenceHelper.checkIntervalMinutes])
+ * or as a one-off triggered by the "即時偵測" button ([enqueueImmediateCheck]).
  */
 class WeatherWorker(
     context: Context,
@@ -21,19 +25,24 @@ class WeatherWorker(
 
     companion object {
         const val WORK_NAME = "WeatherCheckWork"
+        const val MANUAL_WORK_NAME = "WeatherManualCheckWork"
+        const val KEY_MANUAL_CHECK = "manual_check"
 
         /**
-         * Enqueues a unique periodic work request that fires every hour.
-         * Uses [ExistingPeriodicWorkPolicy.KEEP] so re-scheduling after boot
-         * or settings change does not reset the timer unnecessarily.
+         * Enqueues a unique periodic work request at the user-configured interval
+         * ([PreferenceHelper.checkIntervalMinutes]). Uses [ExistingPeriodicWorkPolicy.UPDATE]
+         * so that changing the interval in Settings takes effect on the next run instead
+         * of being ignored in favor of a stale schedule.
          */
         fun schedule(context: Context) {
+            val intervalMinutes = PreferenceHelper(context).checkIntervalMinutes.coerceAtLeast(15)
+
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
             val request = PeriodicWorkRequestBuilder<WeatherWorker>(
-                1, TimeUnit.HOURS
+                intervalMinutes.toLong(), TimeUnit.MINUTES
             )
                 .setConstraints(constraints)
                 .setBackoffCriteria(
@@ -45,7 +54,7 @@ class WeatherWorker(
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request
             )
         }
@@ -54,12 +63,35 @@ class WeatherWorker(
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
         }
+
+        /**
+         * Enqueues a single immediate check ("即時偵測" button), bypassing the
+         * monitoring-enabled toggle. Replaces any not-yet-run manual check so
+         * repeated taps don't pile up duplicate requests.
+         */
+        fun enqueueImmediateCheck(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val request = OneTimeWorkRequestBuilder<WeatherWorker>()
+                .setConstraints(constraints)
+                .setInputData(workDataOf(KEY_MANUAL_CHECK to true))
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                MANUAL_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
+        }
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val prefHelper = PreferenceHelper(applicationContext)
+        val isManualCheck = inputData.getBoolean(KEY_MANUAL_CHECK, false)
 
-        if (!prefHelper.monitoringEnabled) {
+        if (!isManualCheck && !prefHelper.monitoringEnabled) {
             return@withContext Result.success()
         }
 
@@ -71,15 +103,16 @@ class WeatherWorker(
         }
 
         try {
-            // Step 1: Get GPS location
+            // Steps 1–2: Get GPS location and resolve to a CWA county/city name.
+            // If either fails (no GPS fix, or reverse-geocoding fails), fall back to
+            // PreferenceHelper.DEFAULT_FALLBACK_CITY instead of retrying forever, so the
+            // user still gets alerts and a clear "GPS not detected" status.
             val locationHelper = LocationHelper(applicationContext)
             val location = locationHelper.getCurrentLocation()
-                ?: return@withContext Result.retry()
+            val resolvedCity = location?.let { locationHelper.getCityFromLocation(it) }
 
-            // Step 2: Resolve to CWA county/city name
-            val cityName = locationHelper.getCityFromLocation(location)
-                ?: return@withContext Result.retry()
-
+            val cityName = resolvedCity ?: PreferenceHelper.DEFAULT_FALLBACK_CITY
+            prefHelper.locationIsFallback = resolvedCity == null
             prefHelper.lastLocation = cityName
 
             // Step 3: Call CWA API
@@ -102,7 +135,7 @@ class WeatherWorker(
                 // Step 5: Notify if PoP exceeds threshold
                 val threshold = prefHelper.rainThreshold
                 if (pop > threshold) {
-                    NotificationHelper(applicationContext).showRainAlert(cityName, pop, threshold)
+                    NotificationHelper(applicationContext).showRainAlert(cityName, threshold)
                 }
             }
 

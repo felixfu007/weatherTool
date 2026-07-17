@@ -16,6 +16,13 @@ class NotificationHelper(private val context: Context) {
     companion object {
         const val CHANNEL_ID = "weather_alert_channel"
         const val NOTIFICATION_ID = 1001
+
+        /**
+         * Builds the alert body text. Kept as a plain function (no Context/string
+         * resource) so the exact wording can be unit-tested on the JVM.
+         */
+        fun buildAlertMessage(locationName: String, threshold: Int): String =
+            "您所在的${locationName}，目前降雨機率已超過${threshold}%，請多加留意。"
     }
 
     init {
@@ -41,7 +48,7 @@ class NotificationHelper(private val context: Context) {
      * Posts a notification informing the user that the precipitation probability for
      * [locationName] has exceeded [threshold].
      */
-    fun showRainAlert(locationName: String, pop: Int, threshold: Int) {
+    fun showRainAlert(locationName: String, threshold: Int) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -52,14 +59,13 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = context.getString(R.string.notification_message, locationName, pop, threshold)
-        val bigText = context.getString(R.string.notification_message_full, locationName, pop, threshold)
+        val message = buildAlertMessage(locationName, threshold)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_rain_notification)
             .setContentTitle(context.getString(R.string.notification_title))
-            .setContentText(contentText)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

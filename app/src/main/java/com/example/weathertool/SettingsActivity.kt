@@ -1,6 +1,7 @@
 package com.example.weathertool
 
 import android.os.Bundle
+import android.widget.ArrayAdapter
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -10,7 +11,8 @@ import com.example.weathertool.databinding.ActivitySettingsBinding
  * Settings screen allowing the user to configure:
  *  - CWA API key
  *  - Rainfall probability alert threshold (0–100 %)
- *  - Enable / disable hourly monitoring
+ *  - Background check frequency
+ *  - Enable / disable monitoring
  */
 class SettingsActivity : AppCompatActivity() {
 
@@ -27,8 +29,17 @@ class SettingsActivity : AppCompatActivity() {
 
         prefHelper = PreferenceHelper(this)
 
+        setupIntervalSpinner()
         loadSettings()
         setupListeners()
+    }
+
+    private fun setupIntervalSpinner() {
+        val adapter = ArrayAdapter.createFromResource(
+            this, R.array.interval_options, android.R.layout.simple_spinner_item
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerInterval.adapter = adapter
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -42,6 +53,11 @@ class SettingsActivity : AppCompatActivity() {
         val threshold = prefHelper.rainThreshold
         binding.seekBarThreshold.progress = threshold
         binding.tvThresholdValue.text = getString(R.string.threshold_value, threshold)
+
+        val intervalIndex = PreferenceHelper.INTERVAL_OPTIONS_MINUTES
+            .indexOf(prefHelper.checkIntervalMinutes)
+            .let { if (it >= 0) it else PreferenceHelper.INTERVAL_OPTIONS_MINUTES.indexOf(PreferenceHelper.DEFAULT_CHECK_INTERVAL_MINUTES) }
+        binding.spinnerInterval.setSelection(intervalIndex)
 
         binding.switchMonitoring.isChecked = prefHelper.monitoringEnabled
     }
@@ -76,6 +92,14 @@ class SettingsActivity : AppCompatActivity() {
 
         prefHelper.apiKey = apiKey
         prefHelper.rainThreshold = binding.seekBarThreshold.progress
+        prefHelper.checkIntervalMinutes =
+            PreferenceHelper.INTERVAL_OPTIONS_MINUTES[binding.spinnerInterval.selectedItemPosition]
+
+        // Re-apply the schedule so a changed interval takes effect immediately
+        // instead of waiting for the current periodic run to fire.
+        if (prefHelper.monitoringEnabled) {
+            WeatherWorker.schedule(this)
+        }
 
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
     }
