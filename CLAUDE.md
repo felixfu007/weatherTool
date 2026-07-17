@@ -39,6 +39,120 @@ CWA_API_KEY=your-key-here
 
 `app/build.gradle.kts` 會在建置時讀取此檔案，並將其暴露為 `BuildConfig.CWA_API_KEY`，供 `PreferenceHelper.apiKey` 在使用者尚未於設定畫面輸入金鑰時作為預設值。即使不設定，App 仍可正常建置與執行，只是使用者必須先到「設定」畫面貼上金鑰，監控功能才會生效。
 
+## 全新機器環境建置（未安裝 Android Studio）
+
+若新機器只有 JDK、沒有 Android Studio／Android SDK，`./gradlew` 會因為缺少 SDK 而失敗。以下步驟已在 Windows + Git Bash 實測可行，其他平台把可執行檔副檔名與 command-line tools 下載連結換掉即可。
+
+### 1. 確認 JDK
+
+需要 JDK 17 以上（實測用 Eclipse Adoptium JDK 21）。若系統預設 `java` 版本不合適，記得在執行 gradle 前手動指定：
+
+```bash
+export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-21.0.11.10-hotspot"
+```
+
+### 2. 安裝 Android SDK command-line tools
+
+Android Studio 預設 SDK 路徑是 `%LOCALAPPDATA%\Android\Sdk`（即 `C:\Users\<你>\AppData\Local\Android\Sdk`），沒有的話手動建立：
+
+```bash
+ANDROID_HOME="/c/Users/<你>/AppData/Local/Android/Sdk"
+mkdir -p "$ANDROID_HOME/cmdline-tools"
+cd "$ANDROID_HOME/cmdline-tools"
+# Windows 版連結；其他平台把 win 換成 mac / linux，
+# 最新版本號請查 https://developer.android.com/studio#command-tools
+curl -L -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip
+unzip -q cmdline-tools.zip
+rm cmdline-tools.zip
+mv cmdline-tools latest_tmp && mkdir -p latest && mv latest_tmp/* latest/ && rmdir latest_tmp
+```
+
+`sdkmanager` 解壓後必須放在 `cmdline-tools/latest/`，否則 gradle 找不到工具鏈。
+
+### 3. 用 sdkmanager 安裝建置所需套件
+
+```bash
+export ANDROID_HOME="/c/Users/<你>/AppData/Local/Android/Sdk"
+cd "$ANDROID_HOME/cmdline-tools/latest/bin"
+yes | ./sdkmanager.bat --sdk_root="$ANDROID_HOME" \
+  "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+```
+
+`yes |` 是為了自動接受授權條款（第一次執行一定會跳授權文字）。
+
+### 4. 建立 local.properties
+
+```properties
+sdk.dir=C:/Users/<你>/AppData/Local/Android/Sdk
+CWA_API_KEY=your-key-here
+```
+
+`sdk.dir` 用正斜線，Gradle 在 Windows 上也吃得下。這個檔案已列入 `.gitignore`，不會被 git 追蹤，換機器一定要重新建立。
+
+### 5. 確認 gradle wrapper 可以執行
+
+`gradle/wrapper/gradle-wrapper.jar` 已經 commit 進 repo，`git clone` 下來後 `./gradlew` 應該可以直接執行。如果又遇到 `ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain`，代表 wrapper jar 又缺失了，補救方式是下載對應版本的完整 Gradle 發行包（見 `gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl`），用它的 `bin/gradle wrapper --gradle-version <版本>` 重新產生。
+
+跑完以上步驟，`./gradlew test` 與 `./gradlew assembleDebug`（見上方「常用指令」）就能正常運作。
+
+## 在模擬器上執行 App
+
+沒有實體手機時，agent 可以自行建立 Android 模擬器（AVD）並透過 adb 操作，取代人手點擊。
+
+### 1. 安裝 emulator 與 system image（一次性）
+
+```bash
+export ANDROID_HOME="/c/Users/<你>/AppData/Local/Android/Sdk"
+cd "$ANDROID_HOME/cmdline-tools/latest/bin"
+yes | ./sdkmanager.bat --sdk_root="$ANDROID_HOME" \
+  "emulator" "system-images;android-34;google_apis;x86_64"
+
+echo "no" | ./avdmanager.bat create avd -n weathertool_avd \
+  -k "system-images;android-34;google_apis;x86_64" -d "pixel_5" --force
+```
+
+### 2. 啟動模擬器並等待開機完成
+
+```bash
+export ANDROID_HOME="/c/Users/<你>/AppData/Local/Android/Sdk"
+"$ANDROID_HOME/emulator/emulator.exe" -avd weathertool_avd -no-snapshot -netdelay none -netspeed full -gpu auto &
+
+ADB="$ANDROID_HOME/platform-tools/adb.exe"
+"$ADB" wait-for-device
+until [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+  sleep 5
+done
+```
+
+建議把 emulator 指令丟到背景（agent 環境用 `run_in_background`），開機大約需要 1–2 分鐘。
+
+### 3. 安裝並啟動 App
+
+```bash
+./gradlew installDebug   # 會自動裝到目前唯一連線的裝置/模擬器
+export MSYS_NO_PATHCONV=1   # Git Bash 下必加，否則 /sdcard/... 會被誤轉成 Windows 路徑
+"$ADB" shell am start -n com.example.weathertool/.MainActivity
+```
+
+### 4. 用截圖代替肉眼看畫面
+
+Agent 沒有畫面可看，靠 `adb screencap` + `Read` 圖片工具驗證：
+
+```bash
+"$ADB" shell screencap -p /sdcard/screen.png
+"$ADB" pull /sdcard/screen.png ./scratch_screen.png   # 之後記得刪除，不要留在專案目錄
+```
+
+模擬點擊時要注意：截圖顯示給你看的圖片可能被縮放過（工具訊息裡會標註縮放倍率），真正要送給 `adb shell input tap x y` 的座標必須是**實際螢幕解析度**，用 `adb shell wm size` 查得到（此模擬器是 1080x2340）。直接拿縮放後的圖片座標去點會點錯位置。
+
+### 5. 除錯閃退
+
+App 沒反應或直接跳回桌面，通常是崩潰了，用 logcat 找 `FATAL EXCEPTION`：
+
+```bash
+"$ADB" logcat -d | grep -B5 -A 40 "FATAL EXCEPTION"
+```
+
 ## 架構說明
 
 所有原始碼都放在同一個 package：`app/src/main/java/com/example/weathertool/`。專案沒有分層為多個模組——每個類別各司其職、職責單一，彼此透過 `PreferenceHelper`（SharedPreferences）作為共享狀態溝通，而非透過 DI 容器。
