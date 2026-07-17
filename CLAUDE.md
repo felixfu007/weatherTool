@@ -1,64 +1,64 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本檔案提供 Claude Code（claude.ai/code）在此儲存庫中操作程式碼時所需的指引。
 
-## Project overview
+## 專案概覽
 
-WeatherTool is a single-module Android app (Kotlin) that polls Taiwan's Central Weather Administration (CWA) open-data API once an hour in the background and pushes a notification when the local rain probability (PoP) crosses a user-set threshold. See [README.md](README.md) for the end-user feature description and permission list.
+WeatherTool 是一個單模組的 Android App（Kotlin），會在背景每小時輪詢一次台灣中央氣象署（CWA）開放資料 API，當當地降雨機率（PoP）超過使用者設定的閾值時推播通知。使用者面向的功能說明與權限列表請參考 [README.md](README.md)。
 
-## Commands
+## 常用指令
 
-Requires a JDK + Android SDK (or Android Studio) with `compileSdk 34` / `minSdk 26` installed.
+需要安裝 JDK + Android SDK（或 Android Studio），並具備 `compileSdk 34` / `minSdk 26`。
 
 ```bash
-# Build debug APK
+# 建置 debug APK
 ./gradlew assembleDebug
 
-# Run unit tests (JVM, no emulator needed)
+# 執行所有單元測試（JVM，不需模擬器）
 ./gradlew test
 
-# Run a single test class
+# 執行單一測試類別
 ./gradlew testDebugUnitTest --tests "com.example.weathertool.WeatherDataTest"
 
-# Run a single test method
+# 執行單一測試方法
 ./gradlew testDebugUnitTest --tests "com.example.weathertool.WeatherDataTest.alert should fire when pop exceeds threshold"
 
-# Lint
+# Lint 檢查
 ./gradlew lint
 ```
 
-There is no `androidTest` (instrumented) source set yet — all current tests live under `app/src/test` and run on the JVM.
+目前尚未建立 `androidTest`（儀器化測試）source set —— 所有測試都放在 `app/src/test` 下並以 JVM 執行。
 
-### Local API key setup
+### 本機 API 金鑰設定
 
-The app calls the CWA API, which requires a free authorization key from https://opendata.cwa.gov.tw/. For local builds, create `local.properties` in the repo root (already gitignored) with:
+App 會呼叫 CWA API，需要在 https://opendata.cwa.gov.tw/ 免費申請授權碼。本機建置時，請在專案根目錄建立 `local.properties`（已列入 .gitignore）並加入：
 
 ```properties
 CWA_API_KEY=your-key-here
 ```
 
-`app/build.gradle.kts` reads this at build time and exposes it as `BuildConfig.CWA_API_KEY`, which `PreferenceHelper.apiKey` falls back to when the user hasn't entered a key in the Settings screen. Without this, the app still builds and runs but requires the user to paste a key into Settings before monitoring works.
+`app/build.gradle.kts` 會在建置時讀取此檔案，並將其暴露為 `BuildConfig.CWA_API_KEY`，供 `PreferenceHelper.apiKey` 在使用者尚未於設定畫面輸入金鑰時作為預設值。即使不設定，App 仍可正常建置與執行，只是使用者必須先到「設定」畫面貼上金鑰，監控功能才會生效。
 
-## Architecture
+## 架構說明
 
-All source lives in one package: `app/src/main/java/com/example/weathertool/`. There is no layering into separate modules — each class has a single, narrow responsibility and they compose through `PreferenceHelper` (SharedPreferences) as shared state rather than a DI graph.
+所有原始碼都放在同一個 package：`app/src/main/java/com/example/weathertool/`。專案沒有分層為多個模組——每個類別各司其職、職責單一，彼此透過 `PreferenceHelper`（SharedPreferences）作為共享狀態溝通，而非透過 DI 容器。
 
-**Data flow of the hourly check** (`WeatherWorker.doWork()`), the core of the app:
+**每小時檢查的資料流**（`WeatherWorker.doWork()`），是整個 App 的核心邏輯：
 
-1. `WeatherWorker` (a `CoroutineWorker` scheduled hourly via WorkManager) reads settings from `PreferenceHelper`; bails out early if monitoring is disabled or no API key is set.
-2. `LocationHelper.getCurrentLocation()` gets the last known GPS fix via `FusedLocationProviderClient`, then `getCityFromLocation()` reverse-geocodes it to a CWA-canonical county/city name using `Geocoder` + the `CITY_NAME_MAP` table (normalizes "台"/"臺" character variants across all 22 Taiwan divisions).
-3. `WeatherApiService.create().getWeatherForecast(...)` (Retrofit + OkHttp + Gson) calls CWA endpoint `F-C0032-001`, deserializing into the `WeatherResponse` → `WeatherRecords` → `LocationData` → `WeatherElement` → `TimeData` → `Parameter` data-class chain (`WeatherResponse.kt`).
-4. `WeatherWorker.extractPoP()` pulls the first PoP time-slot's `parameterName` out of that response tree for the resolved city.
-5. If PoP exceeds `PreferenceHelper.rainThreshold`, `NotificationHelper.showRainAlert()` posts a notification (channel created lazily in its `init`).
-6. Any failure at the location or API step returns `Result.retry()`, leaning on WorkManager's built-in exponential backoff (configured in `WeatherWorker.schedule()`) rather than custom retry logic.
+1. `WeatherWorker`（透過 WorkManager 每小時排程的 `CoroutineWorker`）從 `PreferenceHelper` 讀取設定；若監控未啟用或未設定 API 金鑰，會提早結束。
+2. `LocationHelper.getCurrentLocation()` 透過 `FusedLocationProviderClient` 取得最近一次已知的 GPS 定位，接著 `getCityFromLocation()` 使用 `Geocoder` 搭配 `CITY_NAME_MAP` 對照表反向地理編碼為 CWA 標準縣市名稱（涵蓋台灣全部 22 個行政區，並正規化「台」／「臺」異體字）。
+3. `WeatherApiService.create().getWeatherForecast(...)`（Retrofit + OkHttp + Gson）呼叫 CWA 的 `F-C0032-001` 端點，並反序列化為 `WeatherResponse` → `WeatherRecords` → `LocationData` → `WeatherElement` → `TimeData` → `Parameter` 這條資料類別鏈（定義於 `WeatherResponse.kt`）。
+4. `WeatherWorker.extractPoP()` 從上述回應樹中取出對應城市第一個時段的 PoP（`parameterName`）數值。
+5. 若 PoP 超過 `PreferenceHelper.rainThreshold`，`NotificationHelper.showRainAlert()` 會推送通知（通知頻道在其 `init` 中延遲建立）。
+6. 定位或 API 呼叫任一步驟失敗時一律回傳 `Result.retry()`，交由 WorkManager 內建的指數退避機制處理（設定於 `WeatherWorker.schedule()`），不額外實作自訂重試邏輯。
 
-**Scheduling and lifecycle:**
-- `WeatherWorker.schedule()` / `.cancel()` are the only entry points that touch WorkManager; called from `MainActivity` (toggle button), `SettingsActivity` (monitoring switch), and `BootReceiver` (on `BOOT_COMPLETED`, only if monitoring was previously enabled) — keeping all three UI/lifecycle triggers consistent.
-- `ExistingPeriodicWorkPolicy.KEEP` is used deliberately so re-scheduling (e.g. after reboot) doesn't reset the hourly timer.
+**排程與生命週期：**
+- `WeatherWorker.schedule()` / `.cancel()` 是唯一會操作 WorkManager 的進入點；分別由 `MainActivity`（切換按鈕）、`SettingsActivity`（監控開關）、`BootReceiver`（在 `BOOT_COMPLETED` 時，僅當先前已啟用監控才觸發）呼叫——確保這三處 UI／生命週期觸發點行為一致。
+- 刻意使用 `ExistingPeriodicWorkPolicy.KEEP`，讓重新排程（例如開機後）不會重置每小時的計時器。
 
-**UI:**
-- `MainActivity` only displays status (from `PreferenceHelper`) and drives the permission request chain: POST_NOTIFICATIONS (Android 13+) → ACCESS_FINE/COARSE_LOCATION → ACCESS_BACKGROUND_LOCATION (Android 10+), each step falling through to the next regardless of grant/deny so the app degrades gracefully instead of blocking.
-- `SettingsActivity` edits API key / threshold / monitoring toggle directly against `PreferenceHelper`; toggling monitoring here calls `WeatherWorker.schedule/cancel` immediately rather than waiting for a save action.
-- Both activities use view binding (`ActivityMainBinding` / `ActivitySettingsBinding`); `buildFeatures.viewBinding = true` in `app/build.gradle.kts`.
+**UI：**
+- `MainActivity` 只負責顯示狀態（來自 `PreferenceHelper`）並驅動權限請求流程：POST_NOTIFICATIONS（Android 13+）→ ACCESS_FINE/COARSE_LOCATION → ACCESS_BACKGROUND_LOCATION（Android 10+），不論使用者是否同意，每一步都會繼續往下走，讓 App 優雅降級而非卡住流程。
+- `SettingsActivity` 直接對 `PreferenceHelper` 讀寫 API 金鑰／閾值／監控開關；切換監控開關會立即呼叫 `WeatherWorker.schedule/cancel`，不需等待儲存動作。
+- 兩個 Activity 皆使用 view binding（`ActivityMainBinding` / `ActivitySettingsBinding`）；對應設定為 `app/build.gradle.kts` 中的 `buildFeatures.viewBinding = true`。
 
-**State:** `PreferenceHelper` is the single source of truth for both user settings (API key, threshold, monitoring on/off) and last-observed status (last location, last PoP, last check time) — there is no database or repository layer.
+**狀態管理：** `PreferenceHelper` 是唯一的狀態來源，同時保存使用者設定（API 金鑰、閾值、監控開關）與最近一次觀測結果（最後定位、最後 PoP、最後檢查時間）——專案中沒有資料庫或 repository 層。
