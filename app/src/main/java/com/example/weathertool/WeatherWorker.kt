@@ -116,6 +116,15 @@ class WeatherWorker(
         internal fun shouldNotify(pop: Int, threshold: Int): Boolean = pop > threshold
 
         /**
+         * Whether [slotStartTime] represents a forecast window we haven't already notified
+         * about, so a rain condition that keeps triggering on every periodic check within the
+         * same window (e.g. every 15 minutes) only pushes one notification instead of one per
+         * check. A `null` slot never qualifies as "new" since there's nothing to identify it by.
+         */
+        internal fun isNewNotifiableSlot(slotStartTime: String?, lastNotifiedSlotStart: String): Boolean =
+            slotStartTime != null && slotStartTime != lastNotifiedSlotStart
+
+        /**
          * Whether an HTTP [statusCode] from the CWA API indicates a problem that retrying
          * won't fix (e.g. an invalid/expired API key), as opposed to a transient server or
          * rate-limiting issue that a later retry might succeed at.
@@ -149,26 +158,32 @@ class WeatherWorker(
             return notYetEnded ?: times.last()
         }
 
+        /** [pop] extracted for the slot starting at [slotStartTime] (null if extraction failed). */
+        internal data class PopResult(val pop: Int, val slotStartTime: String?)
+
         /**
-         * Extracts the PoP value for the time slot covering [now] from the API response.
+         * Extracts the PoP value for the time slot covering [now] from the API response, along
+         * with that slot's start time (used to dedupe repeat notifications for the same window).
          *
          * The CWA F-C0032-001 response contains 3 time slots (12-hour windows) for each location.
          *
-         * @return Integer percentage (0–100), or -1 if parsing fails.
+         * @return [PopResult] with pop as an integer percentage (0–100), or -1 if parsing fails.
          */
-        internal fun extractPoP(response: WeatherResponse, cityName: String, now: Date = Date()): Int {
+        internal fun extractPoP(response: WeatherResponse, cityName: String, now: Date = Date()): PopResult {
             val location = response.records?.location
                 ?.find { it.locationName == cityName }
                 ?: response.records?.location?.firstOrNull()
-                ?: return -1
+                ?: return PopResult(-1, null)
 
             val popElement = location.weatherElement
                 ?.find { it.elementName == "PoP" }
-                ?: return -1
+                ?: return PopResult(-1, null)
 
-            val slot = selectTimeSlot(popElement.time ?: emptyList(), now) ?: return -1
+            val slot = selectTimeSlot(popElement.time ?: emptyList(), now)
+                ?: return PopResult(-1, null)
 
-            return slot.parameter?.parameterName?.toIntOrNull() ?: -1
+            val pop = slot.parameter?.parameterName?.toIntOrNull() ?: -1
+            return PopResult(pop, if (pop >= 0) slot.startTime else null)
         }
     }
 
@@ -211,16 +226,21 @@ class WeatherWorker(
             }
 
             // Step 4: Extract PoP for the current time period
-            val pop = extractPoP(response, resolved.cityName)
+            val popResult = extractPoP(response, resolved.cityName)
+            val pop = popResult.pop
 
             if (pop >= 0) {
                 prefHelper.lastPop = pop
                 prefHelper.lastCheckTime = System.currentTimeMillis()
 
-                // Step 5: Notify if PoP exceeds threshold
+                // Step 5: Notify if PoP exceeds threshold, unless we already notified for
+                // this exact forecast window on an earlier check.
                 val threshold = prefHelper.rainThreshold
-                if (shouldNotify(pop, threshold)) {
+                if (shouldNotify(pop, threshold) &&
+                    isNewNotifiableSlot(popResult.slotStartTime, prefHelper.lastNotifiedSlotStart)
+                ) {
                     NotificationHelper(applicationContext).showRainAlert(resolved.cityName, threshold)
+                    prefHelper.lastNotifiedSlotStart = popResult.slotStartTime ?: ""
                 }
             }
 

@@ -79,17 +79,19 @@ class WeatherDataTest {
     @Test
     fun `PoP is correctly read from response for matching city`() {
         val response = buildResponse("臺北市", "70")
-        assertEquals(70, WeatherWorker.extractPoP(response, "臺北市"))
+        val result = WeatherWorker.extractPoP(response, "臺北市")
+        assertEquals(70, result.pop)
+        assertEquals("2024-01-01 06:00:00", result.slotStartTime)
     }
 
     @Test
     fun `PoP falls back to the first location when the requested city is missing`() {
         val response = buildResponse("高雄市", "40")
-        assertEquals(40, WeatherWorker.extractPoP(response, "臺北市"))
+        assertEquals(40, WeatherWorker.extractPoP(response, "臺北市").pop)
     }
 
     @Test
-    fun `PoP extraction returns -1 when element list is empty`() {
+    fun `PoP extraction returns -1 and no slot when element list is empty`() {
         val response = WeatherResponse(
             success = "true",
             records = WeatherRecords(
@@ -102,13 +104,15 @@ class WeatherDataTest {
                 )
             )
         )
-        assertEquals(-1, WeatherWorker.extractPoP(response, "臺北市"))
+        val result = WeatherWorker.extractPoP(response, "臺北市")
+        assertEquals(-1, result.pop)
+        assertNull(result.slotStartTime)
     }
 
     @Test
     fun `PoP extraction returns -1 when location list is null`() {
         val response = WeatherResponse(success = "true", records = WeatherRecords(null, null))
-        assertEquals(-1, WeatherWorker.extractPoP(response, "臺北市"))
+        assertEquals(-1, WeatherWorker.extractPoP(response, "臺北市").pop)
     }
 
     // -----------------------------------------------------------------------
@@ -160,7 +164,9 @@ class WeatherDataTest {
             )
         )
         val now = taipeiFormat.parse("2024-06-01 18:00:00")!!
-        assertEquals(50, WeatherWorker.extractPoP(response, "臺北市", now))
+        val result = WeatherWorker.extractPoP(response, "臺北市", now)
+        assertEquals(50, result.pop)
+        assertEquals("2024-06-01 12:00:00", result.slotStartTime)
     }
 
     @Test
@@ -176,6 +182,40 @@ class WeatherDataTest {
     @Test
     fun `alert should not fire when pop is below threshold`() {
         assertFalse(WeatherWorker.shouldNotify(pop = 30, threshold = 50))
+    }
+
+    // -----------------------------------------------------------------------
+    // WeatherWorker – dedupe repeat notifications for the same forecast slot
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `a slot never notified before is new`() {
+        assertTrue(WeatherWorker.isNewNotifiableSlot("2024-06-01 06:00:00", lastNotifiedSlotStart = ""))
+    }
+
+    @Test
+    fun `the same slot already notified is not new`() {
+        assertFalse(
+            WeatherWorker.isNewNotifiableSlot(
+                "2024-06-01 06:00:00",
+                lastNotifiedSlotStart = "2024-06-01 06:00:00"
+            )
+        )
+    }
+
+    @Test
+    fun `a different slot than the last notified one is new`() {
+        assertTrue(
+            WeatherWorker.isNewNotifiableSlot(
+                "2024-06-01 18:00:00",
+                lastNotifiedSlotStart = "2024-06-01 06:00:00"
+            )
+        )
+    }
+
+    @Test
+    fun `a null slot is never notifiable`() {
+        assertFalse(WeatherWorker.isNewNotifiableSlot(null, lastNotifiedSlotStart = ""))
     }
 
     // -----------------------------------------------------------------------
@@ -261,6 +301,11 @@ class WeatherDataTest {
     fun `location fallback defaults to Taipei and is off by default`() {
         assertEquals("臺北市", PreferenceHelper.DEFAULT_FALLBACK_CITY)
         assertFalse(PreferenceHelper.DEFAULT_LOCATION_IS_FALLBACK)
+    }
+
+    @Test
+    fun `no forecast slot has been notified about by default`() {
+        assertEquals("", PreferenceHelper.DEFAULT_LAST_NOTIFIED_SLOT_START)
     }
 
     // -----------------------------------------------------------------------

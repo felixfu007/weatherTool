@@ -20,11 +20,13 @@ class PreferenceHelper(context: Context) {
         const val KEY_LAST_POP = "last_pop"
         const val KEY_CHECK_INTERVAL_MINUTES = "check_interval_minutes"
         const val KEY_LOCATION_IS_FALLBACK = "location_is_fallback"
+        const val KEY_LAST_NOTIFIED_SLOT_START = "last_notified_slot_start"
 
         const val DEFAULT_THRESHOLD = 50
         const val DEFAULT_MONITORING_ENABLED = false
         const val DEFAULT_CHECK_INTERVAL_MINUTES = 60
         const val DEFAULT_LOCATION_IS_FALLBACK = false
+        const val DEFAULT_LAST_NOTIFIED_SLOT_START = ""
 
         /** Selectable background check frequencies, in minutes. WorkManager enforces a 15-minute minimum. */
         val INTERVAL_OPTIONS_MINUTES = intArrayOf(15, 30, 60, 120, 180, 360, 720, 1440)
@@ -72,4 +74,14 @@ class PreferenceHelper(context: Context) {
     var locationIsFallback: Boolean
         get() = prefs.getBoolean(KEY_LOCATION_IS_FALLBACK, DEFAULT_LOCATION_IS_FALLBACK)
         set(value) = prefs.edit().putBoolean(KEY_LOCATION_IS_FALLBACK, value).apply()
+
+    /**
+     * [TimeData.startTime] of the forecast slot that last triggered a rain-alert notification.
+     * Lets a run skip re-notifying while the same slot's PoP keeps exceeding the threshold on
+     * every periodic check, instead of pushing a duplicate notification each time.
+     */
+    var lastNotifiedSlotStart: String
+        get() = prefs.getString(KEY_LAST_NOTIFIED_SLOT_START, DEFAULT_LAST_NOTIFIED_SLOT_START)
+            ?: DEFAULT_LAST_NOTIFIED_SLOT_START
+        set(value) = prefs.edit().putString(KEY_LAST_NOTIFIED_SLOT_START, value).apply()
 }
