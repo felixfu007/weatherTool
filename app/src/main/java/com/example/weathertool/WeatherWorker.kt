@@ -85,13 +85,63 @@ class WeatherWorker(
                 request
             )
         }
+
+        /** Outcome of resolving the city to query, including whether the fallback was used. */
+        internal data class ResolvedLocation(val cityName: String, val isFallback: Boolean)
+
+        /**
+         * Decides whether this run should proceed: manual checks ("即時偵測") always run,
+         * scheduled runs only proceed while monitoring is enabled.
+         */
+        internal fun shouldRun(isManualCheck: Boolean, monitoringEnabled: Boolean): Boolean =
+            isManualCheck || monitoringEnabled
+
+        /**
+         * Resolves the city to query from the geocoded result, falling back to
+         * [PreferenceHelper.DEFAULT_FALLBACK_CITY] when GPS/geocoding produced nothing.
+         */
+        internal fun resolveLocation(geocodedCity: String?): ResolvedLocation =
+            if (geocodedCity != null) {
+                ResolvedLocation(geocodedCity, isFallback = false)
+            } else {
+                ResolvedLocation(PreferenceHelper.DEFAULT_FALLBACK_CITY, isFallback = true)
+            }
+
+        /** Whether the observed [pop] warrants a notification for the given [threshold]. */
+        internal fun shouldNotify(pop: Int, threshold: Int): Boolean = pop > threshold
+
+        /**
+         * Extracts the nearest upcoming PoP value from the API response.
+         *
+         * The CWA F-C0032-001 response contains 3 time slots (12-hour windows) for each location.
+         * We take the first slot as "current period".
+         *
+         * @return Integer percentage (0–100), or -1 if parsing fails.
+         */
+        internal fun extractPoP(response: WeatherResponse, cityName: String): Int {
+            val location = response.records?.location
+                ?.find { it.locationName == cityName }
+                ?: response.records?.location?.firstOrNull()
+                ?: return -1
+
+            val popElement = location.weatherElement
+                ?.find { it.elementName == "PoP" }
+                ?: return -1
+
+            return popElement.time
+                ?.firstOrNull()
+                ?.parameter
+                ?.parameterName
+                ?.toIntOrNull()
+                ?: -1
+        }
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val prefHelper = PreferenceHelper(applicationContext)
         val isManualCheck = inputData.getBoolean(KEY_MANUAL_CHECK, false)
 
-        if (!isManualCheck && !prefHelper.monitoringEnabled) {
+        if (!shouldRun(isManualCheck, prefHelper.monitoringEnabled)) {
             return@withContext Result.success()
         }
 
@@ -109,16 +159,16 @@ class WeatherWorker(
             // user still gets alerts and a clear "GPS not detected" status.
             val locationHelper = LocationHelper(applicationContext)
             val location = locationHelper.getCurrentLocation()
-            val resolvedCity = location?.let { locationHelper.getCityFromLocation(it) }
+            val geocodedCity = location?.let { locationHelper.getCityFromLocation(it) }
 
-            val cityName = resolvedCity ?: PreferenceHelper.DEFAULT_FALLBACK_CITY
-            prefHelper.locationIsFallback = resolvedCity == null
-            prefHelper.lastLocation = cityName
+            val resolved = resolveLocation(geocodedCity)
+            prefHelper.locationIsFallback = resolved.isFallback
+            prefHelper.lastLocation = resolved.cityName
 
             // Step 3: Call CWA API
             val response = WeatherApiService.create().getWeatherForecast(
                 authorization = apiKey,
-                locationName = cityName
+                locationName = resolved.cityName
             )
 
             if (response.success != "true") {
@@ -126,7 +176,7 @@ class WeatherWorker(
             }
 
             // Step 4: Extract PoP for the current time period
-            val pop = extractPoP(response, cityName)
+            val pop = extractPoP(response, resolved.cityName)
 
             if (pop >= 0) {
                 prefHelper.lastPop = pop
@@ -134,8 +184,8 @@ class WeatherWorker(
 
                 // Step 5: Notify if PoP exceeds threshold
                 val threshold = prefHelper.rainThreshold
-                if (pop > threshold) {
-                    NotificationHelper(applicationContext).showRainAlert(cityName, threshold)
+                if (shouldNotify(pop, threshold)) {
+                    NotificationHelper(applicationContext).showRainAlert(resolved.cityName, threshold)
                 }
             }
 
@@ -143,31 +193,5 @@ class WeatherWorker(
         } catch (e: Exception) {
             return@withContext Result.retry()
         }
-    }
-
-    /**
-     * Extracts the nearest upcoming PoP value from the API response.
-     *
-     * The CWA F-C0032-001 response contains 3 time slots (12-hour windows) for each location.
-     * We take the first slot as "current period".
-     *
-     * @return Integer percentage (0–100), or -1 if parsing fails.
-     */
-    private fun extractPoP(response: WeatherResponse, cityName: String): Int {
-        val location = response.records?.location
-            ?.find { it.locationName == cityName }
-            ?: response.records?.location?.firstOrNull()
-            ?: return -1
-
-        val popElement = location.weatherElement
-            ?.find { it.elementName == "PoP" }
-            ?: return -1
-
-        return popElement.time
-            ?.firstOrNull()
-            ?.parameter
-            ?.parameterName
-            ?.toIntOrNull()
-            ?: -1
     }
 }

@@ -40,7 +40,9 @@ class WeatherDataTest {
     }
 
     // -----------------------------------------------------------------------
-    // WeatherWorker – PoP extraction logic (tested via data-class helpers)
+    // WeatherWorker – exercises the real companion-object functions directly
+    // (not copies of the logic), so a regression in the production code
+    // actually fails these tests.
     // -----------------------------------------------------------------------
 
     private fun buildResponse(locationName: String, popValue: String): WeatherResponse =
@@ -74,17 +76,17 @@ class WeatherDataTest {
     @Test
     fun `PoP is correctly read from response for matching city`() {
         val response = buildResponse("臺北市", "70")
-        val location = response.records?.location?.find { it.locationName == "臺北市" }
-        val pop = location?.weatherElement
-            ?.find { it.elementName == "PoP" }
-            ?.time?.firstOrNull()
-            ?.parameter?.parameterName
-            ?.toIntOrNull()
-        assertEquals(70, pop)
+        assertEquals(70, WeatherWorker.extractPoP(response, "臺北市"))
     }
 
     @Test
-    fun `PoP returns null when element list is empty`() {
+    fun `PoP falls back to the first location when the requested city is missing`() {
+        val response = buildResponse("高雄市", "40")
+        assertEquals(40, WeatherWorker.extractPoP(response, "臺北市"))
+    }
+
+    @Test
+    fun `PoP extraction returns -1 when element list is empty`() {
         val response = WeatherResponse(
             success = "true",
             records = WeatherRecords(
@@ -97,33 +99,62 @@ class WeatherDataTest {
                 )
             )
         )
-        val pop = response.records?.location?.firstOrNull()
-            ?.weatherElement?.find { it.elementName == "PoP" }
-            ?.time?.firstOrNull()
-            ?.parameter?.parameterName
-            ?.toIntOrNull()
-        assertNull(pop)
+        assertEquals(-1, WeatherWorker.extractPoP(response, "臺北市"))
+    }
+
+    @Test
+    fun `PoP extraction returns -1 when location list is null`() {
+        val response = WeatherResponse(success = "true", records = WeatherRecords(null, null))
+        assertEquals(-1, WeatherWorker.extractPoP(response, "臺北市"))
     }
 
     @Test
     fun `alert should fire when pop exceeds threshold`() {
-        val pop = 60
-        val threshold = 50
-        assertTrue("Alert should fire when PoP > threshold", pop > threshold)
+        assertTrue(WeatherWorker.shouldNotify(pop = 60, threshold = 50))
     }
 
     @Test
     fun `alert should not fire when pop equals threshold`() {
-        val pop = 50
-        val threshold = 50
-        assertFalse("Alert should NOT fire when PoP == threshold", pop > threshold)
+        assertFalse(WeatherWorker.shouldNotify(pop = 50, threshold = 50))
     }
 
     @Test
     fun `alert should not fire when pop is below threshold`() {
-        val pop = 30
-        val threshold = 50
-        assertFalse("Alert should NOT fire when PoP < threshold", pop > threshold)
+        assertFalse(WeatherWorker.shouldNotify(pop = 30, threshold = 50))
+    }
+
+    // -----------------------------------------------------------------------
+    // WeatherWorker – run gate (manual check bypasses the monitoring toggle)
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `scheduled run proceeds only when monitoring is enabled`() {
+        assertTrue(WeatherWorker.shouldRun(isManualCheck = false, monitoringEnabled = true))
+        assertFalse(WeatherWorker.shouldRun(isManualCheck = false, monitoringEnabled = false))
+    }
+
+    @Test
+    fun `manual check always proceeds regardless of monitoring toggle`() {
+        assertTrue(WeatherWorker.shouldRun(isManualCheck = true, monitoringEnabled = true))
+        assertTrue(WeatherWorker.shouldRun(isManualCheck = true, monitoringEnabled = false))
+    }
+
+    // -----------------------------------------------------------------------
+    // WeatherWorker – location fallback resolution
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `resolveLocation uses the geocoded city when available`() {
+        val resolved = WeatherWorker.resolveLocation("高雄市")
+        assertEquals("高雄市", resolved.cityName)
+        assertFalse(resolved.isFallback)
+    }
+
+    @Test
+    fun `resolveLocation falls back to the default city when geocoding failed`() {
+        val resolved = WeatherWorker.resolveLocation(null)
+        assertEquals(PreferenceHelper.DEFAULT_FALLBACK_CITY, resolved.cityName)
+        assertTrue(resolved.isFallback)
     }
 
     // -----------------------------------------------------------------------
