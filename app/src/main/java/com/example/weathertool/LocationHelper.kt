@@ -3,8 +3,11 @@ package com.example.weathertool
 import android.content.Context
 import android.location.Geocoder
 import android.location.Location
+import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.tasks.await
 import java.util.Locale
 
@@ -50,16 +53,35 @@ class LocationHelper(private val context: Context) {
             "金門縣" to "金門縣",
             "連江縣" to "連江縣"
         )
+
+        /** Max time to wait for a fresh GPS/network fix before giving up on this check. */
+        private const val LOCATION_REQUEST_TIMEOUT_MILLIS = 15_000L
     }
 
     /**
-     * Returns the most recent known location. Requires ACCESS_FINE_LOCATION or
-     * ACCESS_COARSE_LOCATION permission to have been granted before calling.
+     * Actively requests a fresh location fix (bounded to
+     * [LOCATION_REQUEST_TIMEOUT_MILLIS]) rather than relying on the device's last cached fix,
+     * which can be null or stale on a device that hasn't used location recently (e.g. right
+     * after boot, or in a freshly-created emulator). Falls back to the last cached fix if the
+     * fresh request fails or times out. Requires ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION
+     * permission to have been granted before calling.
      *
-     * @return Last known [Location], or null if unavailable.
+     * @return A [Location], or null if both the fresh request and the cached fallback fail.
      */
     @Suppress("MissingPermission")
     suspend fun getCurrentLocation(): Location? {
+        val freshLocation = try {
+            val request = CurrentLocationRequest.Builder()
+                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+                .setDurationMillis(LOCATION_REQUEST_TIMEOUT_MILLIS)
+                .build()
+            fusedLocationClient.getCurrentLocation(request, CancellationTokenSource().token).await()
+        } catch (e: Exception) {
+            null
+        }
+
+        if (freshLocation != null) return freshLocation
+
         return try {
             fusedLocationClient.lastLocation.await()
         } catch (e: Exception) {
