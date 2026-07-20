@@ -179,6 +179,24 @@ class WeatherDataTest {
     }
 
     // -----------------------------------------------------------------------
+    // WeatherWorker – retryable vs. non-retryable HTTP errors
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `invalid API key status codes are not retryable`() {
+        assertTrue(WeatherWorker.isNonRetryableHttpError(401))
+        assertTrue(WeatherWorker.isNonRetryableHttpError(403))
+    }
+
+    @Test
+    fun `transient or unrelated status codes remain retryable`() {
+        assertFalse(WeatherWorker.isNonRetryableHttpError(429))
+        assertFalse(WeatherWorker.isNonRetryableHttpError(500))
+        assertFalse(WeatherWorker.isNonRetryableHttpError(503))
+        assertFalse(WeatherWorker.isNonRetryableHttpError(404))
+    }
+
+    // -----------------------------------------------------------------------
     // WeatherWorker – run gate (manual check bypasses the monitoring toggle)
     // -----------------------------------------------------------------------
 

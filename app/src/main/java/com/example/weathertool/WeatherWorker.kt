@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -114,6 +115,14 @@ class WeatherWorker(
         /** Whether the observed [pop] warrants a notification for the given [threshold]. */
         internal fun shouldNotify(pop: Int, threshold: Int): Boolean = pop > threshold
 
+        /**
+         * Whether an HTTP [statusCode] from the CWA API indicates a problem that retrying
+         * won't fix (e.g. an invalid/expired API key), as opposed to a transient server or
+         * rate-limiting issue that a later retry might succeed at.
+         */
+        internal fun isNonRetryableHttpError(statusCode: Int): Boolean =
+            statusCode == 401 || statusCode == 403
+
         /** CWA forecast timestamps are plain "yyyy-MM-dd HH:mm:ss" in Taiwan local time, no offset. */
         private const val CWA_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss"
         private val TAIPEI_TIME_ZONE: TimeZone = TimeZone.getTimeZone("Asia/Taipei")
@@ -216,6 +225,17 @@ class WeatherWorker(
             }
 
             return@withContext Result.success()
+        } catch (e: HttpException) {
+            // Retrying a request the server has already rejected as unauthorized (e.g. an
+            // invalid/expired CWA API key) just burns battery and rate-limit budget for no
+            // benefit; surface it as a failure instead so WorkManager stops trying.
+            return@withContext if (isNonRetryableHttpError(e.code())) {
+                Result.failure(
+                    workDataOf("error" to "CWA API rejected the request (HTTP ${e.code()}); check the configured API key")
+                )
+            } else {
+                Result.retry()
+            }
         } catch (e: Exception) {
             return@withContext Result.retry()
         }
