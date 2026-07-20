@@ -4,7 +4,7 @@
 
 ## 下載安裝
 
-**[📱 下載最新版 APK（v1.2）](https://raw.githubusercontent.com/felixfu007/weatherTool/dev/release/weathertool-v1.2.apk)**
+**[📱 下載最新版 APK（v1.2）](https://raw.githubusercontent.com/felixfu007/weatherTool/main/release/weathertool-v1.2.apk)**
 
 用手機瀏覽器開啟上面的連結即可直接下載 `.apk` 檔。這是 debug 簽章版本（未上架 Google Play），安裝前請先在手機設定中允許「安裝不明來源的應用程式」：
 
