@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.work.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
@@ -110,15 +114,40 @@ class WeatherWorker(
         /** Whether the observed [pop] warrants a notification for the given [threshold]. */
         internal fun shouldNotify(pop: Int, threshold: Int): Boolean = pop > threshold
 
+        /** CWA forecast timestamps are plain "yyyy-MM-dd HH:mm:ss" in Taiwan local time, no offset. */
+        private const val CWA_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss"
+        private val TAIPEI_TIME_ZONE: TimeZone = TimeZone.getTimeZone("Asia/Taipei")
+
         /**
-         * Extracts the nearest upcoming PoP value from the API response.
+         * Picks the time slot that actually covers [now] out of the CWA F-C0032-001 response's
+         * 12-hour windows, instead of always assuming the array's first entry is "current".
+         * Falls back to the first not-yet-ended window if none of them (a slot whose window has
+         * already fully elapsed relative to [now]) contain it, or to the last window if every
+         * window has already ended (e.g. the response is stale).
+         */
+        internal fun selectTimeSlot(times: List<TimeData>, now: Date = Date()): TimeData? {
+            if (times.isEmpty()) return null
+
+            val format = SimpleDateFormat(CWA_TIME_PATTERN, Locale.TAIWAN).apply {
+                timeZone = TAIPEI_TIME_ZONE
+            }
+
+            val notYetEnded = times.firstOrNull { timeData ->
+                val end = runCatching { format.parse(timeData.endTime) }.getOrNull()
+                end != null && now.before(end)
+            }
+
+            return notYetEnded ?: times.last()
+        }
+
+        /**
+         * Extracts the PoP value for the time slot covering [now] from the API response.
          *
          * The CWA F-C0032-001 response contains 3 time slots (12-hour windows) for each location.
-         * We take the first slot as "current period".
          *
          * @return Integer percentage (0–100), or -1 if parsing fails.
          */
-        internal fun extractPoP(response: WeatherResponse, cityName: String): Int {
+        internal fun extractPoP(response: WeatherResponse, cityName: String, now: Date = Date()): Int {
             val location = response.records?.location
                 ?.find { it.locationName == cityName }
                 ?: response.records?.location?.firstOrNull()
@@ -128,12 +157,9 @@ class WeatherWorker(
                 ?.find { it.elementName == "PoP" }
                 ?: return -1
 
-            return popElement.time
-                ?.firstOrNull()
-                ?.parameter
-                ?.parameterName
-                ?.toIntOrNull()
-                ?: -1
+            val slot = selectTimeSlot(popElement.time ?: emptyList(), now) ?: return -1
+
+            return slot.parameter?.parameterName?.toIntOrNull() ?: -1
         }
     }
 

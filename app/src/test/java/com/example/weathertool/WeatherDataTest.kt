@@ -2,6 +2,9 @@ package com.example.weathertool
 
 import org.junit.Assert.*
 import org.junit.Test
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Unit tests for pure logic in the weather tool app.
@@ -106,6 +109,58 @@ class WeatherDataTest {
     fun `PoP extraction returns -1 when location list is null`() {
         val response = WeatherResponse(success = "true", records = WeatherRecords(null, null))
         assertEquals(-1, WeatherWorker.extractPoP(response, "臺北市"))
+    }
+
+    // -----------------------------------------------------------------------
+    // WeatherWorker – time-slot selection (picks the window covering "now",
+    // not just the array's first entry)
+    // -----------------------------------------------------------------------
+
+    private val taipeiFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.TAIWAN).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Taipei")
+    }
+
+    /** Three consecutive 12-hour windows: 00:00–12:00, 12:00–24:00, 24:00(next day)–12:00. */
+    private val threeSlots = listOf(
+        TimeData("2024-06-01 00:00:00", "2024-06-01 12:00:00", Parameter("20", "百分比")),
+        TimeData("2024-06-01 12:00:00", "2024-06-02 00:00:00", Parameter("50", "百分比")),
+        TimeData("2024-06-02 00:00:00", "2024-06-02 12:00:00", Parameter("80", "百分比"))
+    )
+
+    @Test
+    fun `selectTimeSlot picks the window that contains now`() {
+        val now = taipeiFormat.parse("2024-06-01 18:00:00")!!
+        assertEquals(threeSlots[1], WeatherWorker.selectTimeSlot(threeSlots, now))
+    }
+
+    @Test
+    fun `selectTimeSlot picks the first window when now is before all windows`() {
+        val now = taipeiFormat.parse("2024-05-31 08:00:00")!!
+        assertEquals(threeSlots[0], WeatherWorker.selectTimeSlot(threeSlots, now))
+    }
+
+    @Test
+    fun `selectTimeSlot falls back to the last window when now is after all windows`() {
+        val now = taipeiFormat.parse("2024-06-03 00:00:00")!!
+        assertEquals(threeSlots[2], WeatherWorker.selectTimeSlot(threeSlots, now))
+    }
+
+    @Test
+    fun `selectTimeSlot returns null for an empty list`() {
+        assertNull(WeatherWorker.selectTimeSlot(emptyList()))
+    }
+
+    @Test
+    fun `extractPoP uses the slot covering now, not just the first entry`() {
+        val response = WeatherResponse(
+            success = "true",
+            records = WeatherRecords(
+                datasetDescription = null,
+                location = listOf(LocationData("臺北市", listOf(WeatherElement("PoP", threeSlots))))
+            )
+        )
+        val now = taipeiFormat.parse("2024-06-01 18:00:00")!!
+        assertEquals(50, WeatherWorker.extractPoP(response, "臺北市", now))
     }
 
     @Test
