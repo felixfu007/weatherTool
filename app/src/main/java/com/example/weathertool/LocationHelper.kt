@@ -116,6 +116,11 @@ class LocationHelper(private val context: Context) {
      */
     suspend fun getCityFromLocation(location: Location): String? {
         return try {
+            // Geocoder requires an underlying geocoding service that is not present on all
+            // devices or emulator images; bail out early instead of enqueueing a request
+            // that will never be answered.
+            if (!Geocoder.isPresent()) return null
+
             val geocoder = Geocoder(context, Locale.TRADITIONAL_CHINESE)
             val adminArea: String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 suspendCancellableCoroutine { cont ->

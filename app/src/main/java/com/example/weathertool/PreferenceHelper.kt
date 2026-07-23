@@ -151,4 +151,12 @@ class PreferenceHelper(context: Context) {
     var manualCity: String
         get() = prefs.getString(KEY_MANUAL_CITY, "") ?: ""
         set(value) = prefs.edit().putString(KEY_MANUAL_CITY, value).apply()
+
+    /**
+     * True when the API key is stored in [EncryptedSharedPreferences].
+     * False means the Android keystore was unavailable at startup and the key falls back
+     * to plain SharedPreferences.  Callers (e.g. [MainActivity]) can surface a warning
+     * to inform the user that encryption is not active.
+     */
+    val isApiKeyEncrypted: Boolean get() = encryptedPrefs != null
 }

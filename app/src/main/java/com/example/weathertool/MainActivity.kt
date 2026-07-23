@@ -136,7 +136,11 @@ class MainActivity : AppCompatActivity() {
 
         val apiKey = prefHelper.apiKey
         binding.tvApiStatus.setText(
-            if (apiKey.isNotEmpty()) R.string.api_key_configured else R.string.api_key_not_configured
+            when {
+                apiKey.isEmpty() -> R.string.api_key_not_configured
+                !prefHelper.isApiKeyEncrypted -> R.string.api_key_encryption_unavailable
+                else -> R.string.api_key_configured
+            }
         )
 
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
