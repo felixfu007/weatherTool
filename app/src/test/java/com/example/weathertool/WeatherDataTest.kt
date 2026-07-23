@@ -270,6 +270,20 @@ class WeatherDataTest {
         assertTrue(resolved.isFallback)
     }
 
+    @Test
+    fun `resolveLocation uses the manual city when geocoding failed but manual city is set`() {
+        val resolved = WeatherWorker.resolveLocation(null, manualCity = "高雄市")
+        assertEquals("高雄市", resolved.cityName)
+        assertFalse(resolved.isFallback)
+    }
+
+    @Test
+    fun `resolveLocation prefers geocoded city over manual city`() {
+        val resolved = WeatherWorker.resolveLocation("臺中市", manualCity = "高雄市")
+        assertEquals("臺中市", resolved.cityName)
+        assertFalse(resolved.isFallback)
+    }
+
     // -----------------------------------------------------------------------
     // PreferenceHelper defaults (pure constant checks)
     // -----------------------------------------------------------------------

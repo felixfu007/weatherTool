@@ -63,6 +63,12 @@ class SettingsActivity : AppCompatActivity() {
         )
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerInterval.adapter = adapter
+
+        val cityAdapter = ArrayAdapter.createFromResource(
+            this, R.array.city_options_display, android.R.layout.simple_spinner_item
+        )
+        cityAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerManualCity.adapter = cityAdapter
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -81,6 +87,10 @@ class SettingsActivity : AppCompatActivity() {
             .indexOf(prefHelper.checkIntervalMinutes)
             .let { if (it >= 0) it else PreferenceHelper.INTERVAL_OPTIONS_MINUTES.indexOf(PreferenceHelper.DEFAULT_CHECK_INTERVAL_MINUTES) }
         binding.spinnerInterval.setSelection(intervalIndex)
+
+        val cityIndex = LocationHelper.CITY_OPTIONS_VALUES.indexOf(prefHelper.manualCity)
+            .let { if (it >= 0) it else 0 }
+        binding.spinnerManualCity.setSelection(cityIndex)
 
         binding.switchMonitoring.isChecked = prefHelper.monitoringEnabled
     }
@@ -129,6 +139,7 @@ class SettingsActivity : AppCompatActivity() {
         prefHelper.rainThreshold = binding.seekBarThreshold.progress
         prefHelper.checkIntervalMinutes =
             PreferenceHelper.INTERVAL_OPTIONS_MINUTES[binding.spinnerInterval.selectedItemPosition]
+        prefHelper.manualCity = LocationHelper.CITY_OPTIONS_VALUES[binding.spinnerManualCity.selectedItemPosition]
 
         // Re-apply the schedule so a changed interval takes effect immediately
         // instead of waiting for the current periodic run to fire.

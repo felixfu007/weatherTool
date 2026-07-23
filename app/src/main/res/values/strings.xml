@@ -46,6 +46,11 @@
     <string name="settings_saved">設定已儲存</string>
     <string name="api_key_required">請輸入 API 金鑰</string>
 
+    <!-- Manual city selection -->
+    <string name="manual_city_title">手動指定城市</string>
+    <string name="manual_city_description">未能偵測 GPS 時，優先使用此設定查詢天氣；選「自動偵測」則使用 GPS 定位</string>
+    <string name="manual_city_auto">自動偵測（依 GPS）</string>
+
     <string-array name="interval_options">
         <item>15 分鐘</item>
         <item>30 分鐘</item>
@@ -55,6 +60,34 @@
         <item>6 小時</item>
         <item>12 小時</item>
         <item>24 小時</item>
+    </string-array>
+
+    <!-- City list used for manual city selection in Settings.
+         Must stay in the same order as CITY_OPTIONS_VALUES in LocationHelper. -->
+    <string-array name="city_options_display">
+        <item>自動偵測（依 GPS）</item>
+        <item>臺北市</item>
+        <item>新北市</item>
+        <item>桃園市</item>
+        <item>臺中市</item>
+        <item>臺南市</item>
+        <item>高雄市</item>
+        <item>基隆市</item>
+        <item>新竹市</item>
+        <item>嘉義市</item>
+        <item>新竹縣</item>
+        <item>苗栗縣</item>
+        <item>彰化縣</item>
+        <item>南投縣</item>
+        <item>雲林縣</item>
+        <item>嘉義縣</item>
+        <item>屏東縣</item>
+        <item>宜蘭縣</item>
+        <item>花蓮縣</item>
+        <item>臺東縣</item>
+        <item>澎湖縣</item>
+        <item>金門縣</item>
+        <item>連江縣</item>
     </string-array>
 
     <!-- Notifications -->

@@ -48,6 +48,7 @@ class PreferenceHelper(context: Context) {
         const val KEY_CHECK_INTERVAL_MINUTES = "check_interval_minutes"
         const val KEY_LOCATION_IS_FALLBACK = "location_is_fallback"
         const val KEY_LAST_NOTIFIED_SLOT_START = "last_notified_slot_start"
+        const val KEY_MANUAL_CITY = "manual_city"
 
         const val DEFAULT_THRESHOLD = 50
         const val DEFAULT_MONITORING_ENABLED = false
@@ -138,4 +139,13 @@ class PreferenceHelper(context: Context) {
         get() = prefs.getString(KEY_LAST_NOTIFIED_SLOT_START, DEFAULT_LAST_NOTIFIED_SLOT_START)
             ?: DEFAULT_LAST_NOTIFIED_SLOT_START
         set(value) = prefs.edit().putString(KEY_LAST_NOTIFIED_SLOT_START, value).apply()
+
+    /**
+     * A city name explicitly chosen by the user in Settings.
+     * When non-empty, this is used as the query city if GPS/geocoding fails, instead of
+     * the hardcoded [DEFAULT_FALLBACK_CITY].  An empty string means "use GPS automatically".
+     */
+    var manualCity: String
+        get() = prefs.getString(KEY_MANUAL_CITY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_MANUAL_CITY, value).apply()
 }

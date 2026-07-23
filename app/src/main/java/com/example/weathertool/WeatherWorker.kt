@@ -102,14 +102,19 @@ class WeatherWorker(
             isManualCheck || monitoringEnabled
 
         /**
-         * Resolves the city to query from the geocoded result, falling back to
-         * [PreferenceHelper.DEFAULT_FALLBACK_CITY] when GPS/geocoding produced nothing.
+         * Resolves the city to query.
+         *
+         * Priority:
+         * 1. [geocodedCity] — GPS + reverse-geocoding succeeded (no fallback).
+         * 2. [manualCity]   — User explicitly chose a city in Settings (no fallback).
+         * 3. [PreferenceHelper.DEFAULT_FALLBACK_CITY] — both GPS and manual city unavailable
+         *    ([isFallback] = true so the UI can show a warning).
          */
-        internal fun resolveLocation(geocodedCity: String?): ResolvedLocation =
-            if (geocodedCity != null) {
-                ResolvedLocation(geocodedCity, isFallback = false)
-            } else {
-                ResolvedLocation(PreferenceHelper.DEFAULT_FALLBACK_CITY, isFallback = true)
+        internal fun resolveLocation(geocodedCity: String?, manualCity: String? = null): ResolvedLocation =
+            when {
+                geocodedCity != null -> ResolvedLocation(geocodedCity, isFallback = false)
+                manualCity != null -> ResolvedLocation(manualCity, isFallback = false)
+                else -> ResolvedLocation(PreferenceHelper.DEFAULT_FALLBACK_CITY, isFallback = true)
             }
 
         /** Whether the observed [pop] warrants a notification for the given [threshold]. */
@@ -211,7 +216,7 @@ class WeatherWorker(
             val location = locationHelper.getCurrentLocation()
             val geocodedCity = if (location != null) locationHelper.getCityFromLocation(location) else null
 
-            val resolved = resolveLocation(geocodedCity)
+            val resolved = resolveLocation(geocodedCity, prefHelper.manualCity.takeIf { it.isNotEmpty() })
             prefHelper.locationIsFallback = resolved.isFallback
             prefHelper.lastLocation = resolved.cityName
 
