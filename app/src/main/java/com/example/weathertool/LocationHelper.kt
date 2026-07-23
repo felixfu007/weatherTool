@@ -120,8 +120,10 @@ class LocationHelper(private val context: Context) {
             val adminArea: String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 suspendCancellableCoroutine { cont ->
                     geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
-                        // Guard against resume being called after the coroutine has already been
-                        // cancelled (the Geocoder API provides no cancellation handle).
+                        // The Geocoder API provides no cancellation handle, so the underlying
+                        // geocoding operation continues to completion even if the coroutine is
+                        // cancelled.  The `cont.isActive` guard merely prevents calling
+                        // `resume` on an already-cancelled coroutine (which would throw).
                         if (cont.isActive) cont.resume(addresses.firstOrNull()?.adminArea)
                     }
                 }

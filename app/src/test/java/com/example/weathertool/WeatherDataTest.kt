@@ -355,6 +355,14 @@ class WeatherDataTest {
     }
 
     @Test
+    fun `buildAlertMessage delegates to ALERT_MESSAGE_TEMPLATE`() {
+        // Ensures that both the runtime path (context.getString → ALERT_MESSAGE_TEMPLATE)
+        // and the unit-test path (buildAlertMessage) produce identical output.
+        val expected = NotificationHelper.ALERT_MESSAGE_TEMPLATE.format("臺北市", 50)
+        assertEquals(expected, NotificationHelper.buildAlertMessage("臺北市", 50))
+    }
+
+    @Test
     fun `alert message follows the required wording`() {
         val message = NotificationHelper.buildAlertMessage("臺北市", 50)
         assertEquals("您所在的臺北市，目前降雨機率已超過50%，請多加留意。", message)
