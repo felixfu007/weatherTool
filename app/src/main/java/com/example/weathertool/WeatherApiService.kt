@@ -38,7 +38,8 @@ interface WeatherApiService {
     companion object {
         private const val BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/"
 
-        fun create(): WeatherApiService {
+        /** Shared singleton — OkHttp and Retrofit are expensive to construct; reuse them across every [doWork] call. */
+        private val instance: WeatherApiService by lazy {
             val loggingInterceptor = HttpLoggingInterceptor().apply {
                 level = if (BuildConfig.DEBUG) {
                     HttpLoggingInterceptor.Level.BODY
@@ -54,12 +55,14 @@ interface WeatherApiService {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build()
 
-            return Retrofit.Builder()
+            Retrofit.Builder()
                 .baseUrl(BASE_URL)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
                 .create(WeatherApiService::class.java)
         }
+
+        fun create(): WeatherApiService = instance
     }
 }
