@@ -323,8 +323,36 @@ class WeatherDataTest {
     }
 
     // -----------------------------------------------------------------------
-    // NotificationHelper – alert message wording
+    // LocationHelper – city options list (manual city selection)
     // -----------------------------------------------------------------------
+
+    @Test
+    fun `CITY_OPTIONS_VALUES first entry is the auto-detect placeholder`() {
+        assertEquals("", LocationHelper.CITY_OPTIONS_VALUES[0])
+    }
+
+    @Test
+    fun `CITY_OPTIONS_VALUES covers all 22 administrative divisions plus the auto placeholder`() {
+        assertEquals(23, LocationHelper.CITY_OPTIONS_VALUES.size)
+    }
+
+    @Test
+    fun `CITY_OPTIONS_VALUES non-placeholder entries are all valid CWA city names`() {
+        val validCities = LocationHelper.CITY_NAME_MAP.values.toSet()
+        LocationHelper.CITY_OPTIONS_VALUES.drop(1).forEach { city ->
+            assertTrue("$city is not a recognised CWA city name", city in validCities)
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // NotificationHelper – alert message constant and template
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `ALERT_MESSAGE_TEMPLATE produces the expected formatted string`() {
+        val result = NotificationHelper.ALERT_MESSAGE_TEMPLATE.format("臺北市", 50)
+        assertEquals("您所在的臺北市，目前降雨機率已超過50%，請多加留意。", result)
+    }
 
     @Test
     fun `alert message follows the required wording`() {

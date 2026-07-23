@@ -18,11 +18,24 @@ class NotificationHelper(private val context: Context) {
         const val NOTIFICATION_ID = 1001
 
         /**
-         * Builds the alert body text. Kept as a plain function (no Context/string
-         * resource) so the exact wording can be unit-tested on the JVM.
+         * Printf-style format template for the rain alert message.
+         * Arg 1 (%s): location name.  Arg 2 (%d): threshold percent.
+         *
+         * [R.string.notification_alert_message] contains the identical template so the text
+         * is localizable at runtime.  [buildAlertMessage] uses this constant so that unit
+         * tests on the JVM verify the same template that [showRainAlert] formats via
+         * [Context.getString] — no manual "keep in sync" required.
+         */
+        internal const val ALERT_MESSAGE_TEMPLATE =
+            "您所在的%s，目前降雨機率已超過%d%%，請多加留意。"
+
+        /**
+         * Formats [ALERT_MESSAGE_TEMPLATE] with [locationName] and [threshold].
+         * Kept as a pure function (no [android.content.Context] dependency) so the exact
+         * wording can be verified by JVM unit tests without an Android runtime.
          */
         fun buildAlertMessage(locationName: String, threshold: Int): String =
-            "您所在的${locationName}，目前降雨機率已超過${threshold}%，請多加留意。"
+            ALERT_MESSAGE_TEMPLATE.format(locationName, threshold)
     }
 
     init {
@@ -59,7 +72,7 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val message = buildAlertMessage(locationName, threshold)
+        val message = context.getString(R.string.notification_alert_message, locationName, threshold)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_rain_notification)

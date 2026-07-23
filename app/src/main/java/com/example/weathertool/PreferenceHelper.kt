@@ -2,6 +2,7 @@ package com.example.weathertool
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
@@ -36,6 +37,8 @@ class PreferenceHelper(context: Context) {
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
+    }.onFailure { e ->
+        Log.w("PreferenceHelper", "EncryptedSharedPreferences unavailable; falling back to plain prefs", e)
     }.getOrNull()
 
     companion object {

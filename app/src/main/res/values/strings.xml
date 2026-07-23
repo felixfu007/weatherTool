@@ -94,7 +94,12 @@
     <string name="channel_name">天氣提醒</string>
     <string name="channel_description">當降雨機率超過設定閾值時發送提醒通知</string>
     <string name="notification_title">☔ 降雨提醒</string>
-    <!-- Message wording is built in NotificationHelper.buildAlertMessage() so it stays unit-testable. -->
+    <!-- Alert message shown in the rain notification.
+         %1$s = location name (e.g. "臺北市"), %2$d = threshold percentage.
+         The format must match NotificationHelper.ALERT_MESSAGE_TEMPLATE so both the
+         runtime (context.getString) and unit-test path (buildAlertMessage) produce
+         identical output. -->
+    <string name="notification_alert_message">您所在的%1$s，目前降雨機率已超過%2$d%%，請多加留意。</string>
 
     <!-- Permission dialogs -->
     <string name="permission_notification_title">通知權限</string>
