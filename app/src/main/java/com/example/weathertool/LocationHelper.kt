@@ -3,13 +3,16 @@ package com.example.weathertool
 import android.content.Context
 import android.location.Geocoder
 import android.location.Location
+import android.os.Build
 import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import java.util.Locale
+import kotlin.coroutines.resume
 
 /**
  * Helper class for obtaining the device's GPS location and converting it to a
@@ -92,20 +95,27 @@ class LocationHelper(private val context: Context) {
     /**
      * Converts GPS [location] to the canonical CWA county/city name via reverse-geocoding.
      *
+     * On Android 33+ the non-deprecated async [Geocoder.getFromLocation] overload is used
+     * so the IO thread is not blocked waiting for a network-backed geocode response.
+     * Older API levels fall back to the synchronous overload.
+     *
      * @return A CWA location name (e.g. "臺北市"), or null if reverse-geocoding fails.
      */
-    fun getCityFromLocation(location: Location): String? {
+    suspend fun getCityFromLocation(location: Location): String? {
         return try {
             val geocoder = Geocoder(context, Locale.TRADITIONAL_CHINESE)
-            @Suppress("DEPRECATION")
-            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-            if (!addresses.isNullOrEmpty()) {
-                val adminArea = addresses[0].adminArea ?: return null
-                // Return CWA canonical name, or fall back to raw Geocoder value
-                CITY_NAME_MAP[adminArea] ?: adminArea
+            val adminArea: String? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                suspendCancellableCoroutine { cont ->
+                    geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
+                        cont.resume(addresses.firstOrNull()?.adminArea)
+                    }
+                }
             } else {
-                null
+                @Suppress("DEPRECATION")
+                geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                    ?.firstOrNull()?.adminArea
             }
+            adminArea?.let { CITY_NAME_MAP[it] ?: it }
         } catch (e: Exception) {
             null
         }

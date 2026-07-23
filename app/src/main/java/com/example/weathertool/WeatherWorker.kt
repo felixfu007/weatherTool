@@ -209,7 +209,7 @@ class WeatherWorker(
             // user still gets alerts and a clear "GPS not detected" status.
             val locationHelper = LocationHelper(applicationContext)
             val location = locationHelper.getCurrentLocation()
-            val geocodedCity = location?.let { locationHelper.getCityFromLocation(it) }
+            val geocodedCity = if (location != null) locationHelper.getCityFromLocation(location) else null
 
             val resolved = resolveLocation(geocodedCity)
             prefHelper.locationIsFallback = resolved.isFallback
