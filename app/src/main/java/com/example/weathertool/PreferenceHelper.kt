@@ -2,14 +2,41 @@ package com.example.weathertool
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 /**
  * Wrapper around SharedPreferences for storing app settings and state.
+ *
+ * Non-sensitive settings (thresholds, intervals, last-check results) live in a regular
+ * SharedPreferences file.  The CWA API key is stored in a separate
+ * [EncryptedSharedPreferences] file so it is protected by AES-256 at rest.
+ * On the first read after an upgrade from an older build the key is migrated
+ * automatically from the plain-text store.
  */
 class PreferenceHelper(context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("weather_tool_prefs", Context.MODE_PRIVATE)
+
+    /**
+     * Encrypted store for the API key.  Falls back to a plain [SharedPreferences]
+     * instance (read-only migration source) when the keystore is unavailable on
+     * emulators or locked devices — in that case the migration simply won't run,
+     * but the app continues to function normally.
+     */
+    private val encryptedPrefs: SharedPreferences? = runCatching {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "weather_tool_secure_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }.getOrNull()
 
     companion object {
         const val KEY_API_KEY = "api_key"
@@ -35,10 +62,37 @@ class PreferenceHelper(context: Context) {
         const val DEFAULT_FALLBACK_CITY = "臺北市"
     }
 
-    /** CWA (中央氣象署) open data API authorization key */
+    /** CWA (中央氣象署) open data API authorization key — stored encrypted at rest. */
     var apiKey: String
-        get() = prefs.getString(KEY_API_KEY, BuildConfig.CWA_API_KEY) ?: BuildConfig.CWA_API_KEY
-        set(value) = prefs.edit().putString(KEY_API_KEY, value).apply()
+        get() {
+            // If the encrypted store is available, use it — migrating from the legacy
+            // plain-text entry on first access so existing installations keep their key.
+            if (encryptedPrefs != null) {
+                val encrypted = encryptedPrefs.getString(KEY_API_KEY, null)
+                if (encrypted != null) return encrypted
+
+                // One-time migration: copy from plain prefs → encrypted prefs, then delete.
+                val plain = prefs.getString(KEY_API_KEY, null)
+                if (plain != null) {
+                    encryptedPrefs.edit().putString(KEY_API_KEY, plain).apply()
+                    prefs.edit().remove(KEY_API_KEY).apply()
+                    return plain
+                }
+
+                return BuildConfig.CWA_API_KEY
+            }
+            // Fallback (encrypted store unavailable): plain prefs or build-time default.
+            return prefs.getString(KEY_API_KEY, BuildConfig.CWA_API_KEY) ?: BuildConfig.CWA_API_KEY
+        }
+        set(value) {
+            if (encryptedPrefs != null) {
+                encryptedPrefs.edit().putString(KEY_API_KEY, value).apply()
+                // Ensure the plain-text copy is removed if it still exists.
+                prefs.edit().remove(KEY_API_KEY).apply()
+            } else {
+                prefs.edit().putString(KEY_API_KEY, value).apply()
+            }
+        }
 
     /** Rainfall probability threshold (0–100 %). Alert fires when PoP > threshold. */
     var rainThreshold: Int
